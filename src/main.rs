@@ -1,3 +1,6 @@
+mod generator;
+
 fn main() {
-    println!("Hello, world!");
+    let sentence = generator::generate_random_sentence(3000);
+    println!("{}", sentence);
 }
