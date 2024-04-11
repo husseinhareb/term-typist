@@ -1,8 +1,12 @@
+extern crate termion;
+
 use std::io::{self, Write};
+use termion::input::TermRead;
+use termion::raw::IntoRawMode;
+use crate::generator::generate_random_sentence;
 
 pub fn print_and_input_on_top(initial_text: String) -> io::Result<String> {
-    // Print the initial string
-    print!("{}", initial_text);
+
     io::stdout().flush()?;
 
     // Move the cursor to the leftmost position on the current line (column 1)
@@ -77,4 +81,79 @@ fn compare_and_colorize(input: &str, target: &str) -> String {
     }
 
     colored_output
+}
+
+pub fn listen_for_alphabets() {
+    let initial_text = generate_random_sentence(30).to_string();
+    let red_color = "\x1b[31m";
+    let reset_color = "\x1b[0m";
+
+    let stdin = io::stdin();
+    let mut stdout = io::stdout().into_raw_mode().expect("Failed to set raw mode");
+
+    let mut i = 0;
+    let mut colored_text = String::new(); // String to hold colored text
+    let middle_index = initial_text.len() / 2; // Middle index of the string
+
+    // Generate the initially colored text
+    for (index, char) in initial_text.chars().enumerate() {
+        if index == middle_index {
+            colored_text.push_str(red_color);
+            colored_text.push(char);
+            colored_text.push_str(reset_color);
+        } else {
+            colored_text.push(char);
+        }
+    }
+
+    // Print the initial colored text
+    println!("{}", colored_text);
+
+    for key in stdin.keys() {
+        match key {
+            Ok(key_event) => {
+                match key_event {
+                    termion::event::Key::Char(c) if c.is_alphabetic() => {
+                        // Clear the screen
+                        print!("{}{}{}", termion::clear::All, termion::cursor::Goto(1, 1), termion::cursor::Hide);
+                        io::stdout().flush().unwrap();
+
+                        if c == initial_text.chars().nth(i).unwrap() {
+                            // If the pressed character matches, regenerate the colored text with the new match
+                            colored_text.clear();
+                            for (index, char) in initial_text.chars().enumerate() {
+                                if index == i {
+                                    colored_text.push_str(red_color);
+                                    colored_text.push(char);
+                                    colored_text.push_str(reset_color);
+                                } else {
+                                    colored_text.push(char);
+                                }
+                            }
+                            println!("{}", colored_text);
+                        } else {
+                            // If the pressed character does not match, print the text as it is
+                            println!("{}", initial_text);
+                        }
+                    }
+                    // If 'q' is pressed, quit the loop
+                    termion::event::Key::Char('q') => {
+                        println!("Quitting...");
+                        break;
+                    }
+                    // Handle other key presses
+                    _ => {}
+                }
+            }
+            Err(err) => {
+                eprintln!("Error reading input: {}", err);
+                break;
+            }
+        }
+        i += 1;
+        if i == initial_text.len() {
+            break;
+        }
+        stdout.flush().expect("Failed to flush stdout");
+    }
 }

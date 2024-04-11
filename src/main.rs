@@ -1,8 +1,5 @@
 use std::env;
-extern crate rustbox;
 
-use rustbox::{Color, Key, RustBox};
-use std::io::{self, Write};
 mod config;
 mod generator;
 mod ui;
@@ -19,8 +16,7 @@ fn main() {
 
     if args.len() == 1 {
         let _ = config::create_config();
-        let initial_text = generator::generate_random_sentence(30).to_string();
-        println!("{}",initial_text);
+        let _ = ui::listen_for_alphabets();
         return;
     }
 
