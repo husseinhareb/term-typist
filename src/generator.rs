@@ -2,7 +2,10 @@ use std::env;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::PathBuf;
-use rand::seq::SliceRandom; // Importing SliceRandom trait
+use rand::seq::SliceRandom; 
+
+
+
 fn read_words() -> io::Result<Vec<String>> {
     let mut file_path = PathBuf::new();
     
@@ -35,7 +38,7 @@ pub fn generate_random_sentence(num_words: usize) -> String {
         Ok(words) => words,
         Err(err) => {
             eprintln!("Error reading words: {}", err);
-            return String::new(); // Return an empty string if there's an error
+            return String::new();
         }
     };
 
@@ -50,3 +53,4 @@ pub fn generate_random_sentence(num_words: usize) -> String {
 
     sentence.trim().to_string()
 }
+
