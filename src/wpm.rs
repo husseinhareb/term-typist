@@ -1,7 +1,7 @@
 use std::io::{self, Write};
 use std::time::{Instant, Duration};
 
-fn main() {
+fn wpm() {
     println!("Type some text. Your typing speed will be calculated in real-time.");
     
     let mut input = String::new();
