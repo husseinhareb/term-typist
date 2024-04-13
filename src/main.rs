@@ -7,7 +7,9 @@ mod ui;
 fn help() {
     println!("Usage: term-typist [options] | term-typist");
     println!("Options:");   
-    println!("-h               Display this help message");     
+    println!("-h               Display this help message");
+    println!("-w <number>      Set the number of words");     
+  
 }
 
 
@@ -27,6 +29,24 @@ fn main() {
             "-h" => {
                 help();
                 return;
+            }
+            "-w" => {
+                if let Some(nb_of_words) = iter.next() {
+                    match nb_of_words.parse::<i32>() {
+                        Ok(nb) => {
+                            let _ = config::write_nb_of_words(nb);
+                        }
+                        Err(_) => {
+                            eprintln!("Invalid value provided for -s flag: {}", nb_of_words);
+                            help();
+                            return;
+                        }
+                    }
+                } else {
+                    eprintln!("Unit value not provided for the -s flag.");
+                    help();
+                    return;
+                }
             }
             _ => {
                 eprintln!("Invalid argument: {}", arg);
