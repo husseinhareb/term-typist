@@ -23,8 +23,27 @@ pub fn listen_for_alphabets() {
         match key {
             Ok(key_event) => {
                 match key_event {
-                    termion::event::Key::Char(c) if c.is_alphabetic() => {
+                    termion::event::Key::Backspace => {
+                        if i > 0 {
+                            i -= 1;
+                            char_status[i] = 'N';
 
+                            // Regenerate colored text
+                            colored_text.clear();
+                            for (index, char) in initial_text.chars().enumerate() {
+                                match char_status[index] {
+                                    'N' => colored_text.push_str(WHITE),
+                                    'T' => colored_text.push_str(GREEN),
+                                    'F' => colored_text.push_str(RED),  
+                                    _ => {}
+                                }
+                                colored_text.push(char);
+                            }
+                            colored_text.push_str(WHITE);
+                            print!("{}{}", termion::cursor::Goto(1, 1), colored_text); // Move cursor to beginning of line before printing
+                        }
+                    }
+                    termion::event::Key::Char(c) if c.is_alphabetic() => {
                         print!("{}{}{}", termion::clear::All, termion::cursor::Goto(1, 1), termion::cursor::Hide);
                         io::stdout().flush().unwrap();
 
@@ -34,6 +53,7 @@ pub fn listen_for_alphabets() {
                             char_status[i] = 'F';
                         }
 
+                        // Regenerate colored text
                         colored_text.clear();
                         for (index, char) in initial_text.chars().enumerate() {
                             match char_status[index] {
@@ -46,6 +66,8 @@ pub fn listen_for_alphabets() {
                         }
                         colored_text.push_str(WHITE);
                         println!("{}", colored_text);
+
+                        i += 1; // Increment i for alphabetic keys
                     }
                     // Handle other key presses
                     _ => {}
@@ -56,7 +78,6 @@ pub fn listen_for_alphabets() {
                 break;
             }
         }
-        i += 1;
         if i == initial_text.len() {
             break;
         }
