@@ -1,28 +1,12 @@
-use std::io::{self, Write};
-use std::time::{Instant, Duration};
+use std::time::{SystemTime, Duration};
 
-fn wpm() {
-    println!("Type some text. Your typing speed will be calculated in real-time.");
-    
-    let mut input = String::new();
-    let mut last_key_time = Instant::now();
-    let mut char_count = 0;
+pub fn elapsed_seconds_since_start(start_time: SystemTime) -> f64 {
+    // Get the current time
+    let current_time = SystemTime::now();
 
-    loop {
-        input.clear();
-        match io::stdin().read_line(&mut input) {
-            Ok(_) => {
-                let now = Instant::now();
-                let elapsed = now - last_key_time;
-                last_key_time = now;
-                
-                char_count += input.trim().chars().count();
-                let elapsed_seconds = elapsed.as_secs_f64();
-                let speed = (char_count as f64 / elapsed_seconds)/5.0 * 60.0; // Calculate speed in characters per minute
+    // Calculate the duration since the code started running
+    let elapsed_time = current_time.duration_since(start_time).expect("Time went backwards");
 
-                println!("Speed: {:.2} words per minute", speed);
-            }
-            Err(error) => println!("Error reading input: {}", error),
-        }
-    }
+    // Convert the duration to seconds as a floating-point number
+    elapsed_time.as_secs_f64()
 }
