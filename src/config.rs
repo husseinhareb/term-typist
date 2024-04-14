@@ -20,7 +20,7 @@ pub fn create_config() -> std::io::Result<()> {
 }
 
 // Function to write number of words according to parameter into the config file
-pub fn write_nb_cmds(nb_cmds: i32) -> io::Result<()> {
+pub fn write_nb_of_words(nb_cmds: i32) -> io::Result<()> {
     let file_path = config_file()?;
     let mut file_content = String::new();
 
@@ -53,7 +53,7 @@ pub fn write_nb_cmds(nb_cmds: i32) -> io::Result<()> {
 }
 
 // Function to read numberd of words from config file
-pub fn read_nb_cmds() -> io::Result<i32> {
+pub fn read_nb_of_words() -> io::Result<i32> {
     let file_path = config_file()?;
     let file = File::open(&file_path)?;
     let reader = BufReader::new(file);
@@ -84,7 +84,7 @@ fn config_file() -> Result<PathBuf, io::Error> {
         None => return Err(io::Error::new(io::ErrorKind::NotFound, "Config directory not found")),
     };
 
-    let file_path = config_dir.join("top-cmds").join("top-cmds.conf");
+    let file_path = config_dir.join("term-typist").join("term-typist.conf");
     Ok(file_path)
 }
 

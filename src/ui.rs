@@ -2,14 +2,21 @@ use std::io::{self, Write};
 use termion::input::TermRead;
 use termion::raw::IntoRawMode;
 use crate::generator::generate_random_sentence;
+use crate::config::read_nb_of_words;
 
 const GREEN: &str = "\x1b[32m";
 const RED: &str = "\x1b[31m";
 const WHITE: &str = "\x1b[0m"; 
 
 pub fn listen_for_alphabets() {
-    let initial_text = generate_random_sentence(30).to_string();
-
+    let nb_of_words = match read_nb_of_words() {
+        Ok(num) => num,
+        Err(err) => {
+            eprintln!("Error reading number of words: {}", err);
+            return;
+        }
+    };
+    let initial_text = generate_random_sentence(nb_of_words as usize);
     let stdin = io::stdin();
     let mut stdout = io::stdout().into_raw_mode().expect("Failed to set raw mode");
 
