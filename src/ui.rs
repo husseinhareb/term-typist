@@ -44,12 +44,19 @@ pub fn listen_for_alphabets() {
                         if i > 0 {
                             i -= 1;
                             char_status[i] = 'N';
+                            
                         }
+
                     }
                     termion::event::Key::Char(c) => {
                         if c == ' ' {
+                            if c == initial_text.chars().nth(i).unwrap() {
+                                char_status[i] = 'T';
+                            } else {
+                                char_status[i] = 'F';
+                            }
                             i += 1;
-                            continue;
+                            char_count += 1;
                         }
                         if c.is_alphabetic() {
                             if c == initial_text.chars().nth(i).unwrap() {

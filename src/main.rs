@@ -4,6 +4,7 @@ mod config;
 mod generator;
 mod ui;
 mod wpm;
+
 fn help() {
     println!("Usage: term-typist [options] | term-typist");
     println!("Options:");   
