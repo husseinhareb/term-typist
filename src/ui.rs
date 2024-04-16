@@ -1,24 +1,15 @@
 use std::io::{self, Write};
-use std::thread;
 use termion::input::TermRead;
 use termion::raw::IntoRawMode;
 use termion::clear;
 use crate::generator::generate_random_sentence;
 use crate::config::read_nb_of_words;
+use std::thread;
+use std::time::{Instant, Duration};
 
 const GREEN: &str = "\x1b[32m";
 const RED: &str = "\x1b[31m";
-const WHITE: &str = "\x1b[0m"; 
-
-pub fn stopwatch() {
-    let mut i = 0;
-    loop {
-        std::thread::sleep(std::time::Duration::from_secs(1));
-        i += 1;
-        print!("\r{}s", i);
-        io::stdout().flush().unwrap();
-    }
-}
+const WHITE: &str = "\x1b[0m";
 
 pub fn listen_for_alphabets() {
     let nb_of_words = match read_nb_of_words() {
@@ -41,7 +32,17 @@ pub fn listen_for_alphabets() {
     stdout.flush().unwrap();
     println!("{}", initial_text);
 
-    print!("{}{}", termion::cursor::Goto(1, 5), clear::CurrentLine); // Move cursor to the fifth line
+    // Start a separate thread to calculate the running time
+    let handle = thread::spawn(|| {
+        let start_time = Instant::now();
+        loop {
+            let elapsed = start_time.elapsed();
+            let elapsed_seconds = elapsed.as_secs();
+            print!("\rTime elapsed: {}s", elapsed_seconds);
+            io::stdout().flush().unwrap();
+            thread::sleep(Duration::from_secs(1)); // Sleep for 1 second before updating again
+        }
+    });
 
     for key in stdin.keys() {
         match key {
@@ -87,7 +88,7 @@ pub fn listen_for_alphabets() {
                     colored_text.push(char);
                 }
                 colored_text.push_str(WHITE);
-                print!("\r{}", colored_text); // Clear terminal and move cursor to beginning   
+                print!("{}{}{}", termion::clear::All, termion::cursor::Goto(1, 1), colored_text); // Clear terminal and move cursor to beginning   
                 io::stdout().flush().unwrap();      
             }
             Err(err) => {
@@ -100,24 +101,7 @@ pub fn listen_for_alphabets() {
         }
         stdout.flush().expect("Failed to flush stdout");
     }
-}
 
-pub fn run_simultaneously() {
-    let stopwatch_handle = thread::spawn(|| {
-        stopwatch();
-    });
-
-    let listener_handle = thread::spawn(|| {
-        listen_for_alphabets();
-    });
-
-    stopwatch_handle.join().expect("Stopwatch thread panicked");
-    listener_handle.join().expect("Listener thread panicked");
-
-    // After the user finishes typing, print the timer on a separate line
-    println!("\n\nTimer ended");
-}
-
-fn main() {
-    run_simultaneously();
+    // Wait for the timer thread to finish
+    handle.join().unwrap();
 }
