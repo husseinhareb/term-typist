@@ -19,7 +19,7 @@ fn main() {
 
     if args.len() == 1 {
         let _ = config::create_config();
-        let _ = ui::listen_for_alphabets();
+        let _ = ui::run_simultaneously();
         return;
     }
 
