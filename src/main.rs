@@ -18,24 +18,19 @@ use tui::{
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::{Span, Spans},
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, Borders, Paragraph, Tabs},
     Terminal,
 };
 
-/// Per-character typing status
 #[derive(PartialEq, Clone, Copy)]
-enum Status {
-    Untyped,
-    Correct,
-    Incorrect,
-}
+enum Status { Untyped, Correct, Incorrect }
 
-/// Application state
 struct App {
     target: String,
     status: Vec<Status>,
     start: Instant,
     typed_count: usize,
+    selected_tab: usize, // 0=Time,1=Words,2=Zen
 }
 
 impl App {
@@ -46,98 +41,88 @@ impl App {
             status: vec![Status::Untyped; len],
             start: Instant::now(),
             typed_count: 0,
+            selected_tab: 0,
         }
     }
 
-    /// Handle a keypress: increment count and update status
     fn on_key(&mut self, key: char) {
         self.typed_count += 1;
         if let Some(i) = self.status.iter().position(|&s| s == Status::Untyped) {
             let expected = self.target.chars().nth(i).unwrap();
-            self.status[i] = if key == expected {
-                Status::Correct
-            } else {
-                Status::Incorrect
-            };
+            self.status[i] = if key == expected { Status::Correct } else { Status::Incorrect };
         }
     }
 
-    /// Finished?
     fn is_done(&self) -> bool {
         !self.status.iter().any(|&s| s == Status::Untyped)
     }
 
-    /// Seconds elapsed
     fn elapsed_secs(&self) -> u64 {
         self.start.elapsed().as_secs()
     }
 
-    /// WPM over entire session
     fn wpm(&self) -> f64 {
-        let minutes = self.start.elapsed().as_secs_f64() / 60.0;
-        if minutes > 0.0 {
-            (self.typed_count as f64 / 5.0) / minutes
-        } else {
-            0.0
-        }
+        let mins = self.start.elapsed().as_secs_f64() / 60.0;
+        if mins > 0.0 { (self.typed_count as f64 / 5.0) / mins } else { 0.0 }
     }
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    // 1) Prepare sentence
     let words = load_words()?;
     let sentence = generate_sentence(&words, 30);
     let mut app = App::new(sentence);
 
-    // 2) Enter raw mode & alt screen
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    // 3) Event loop
     let tick_rate = Duration::from_millis(200);
     let mut last_tick = Instant::now();
 
     loop {
         terminal.draw(|f| {
             let size = f.size();
-            // 3 chunks: speed (3), text (min 3), footer (1)
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .margin(1)
                 .constraints([
-                    Constraint::Length(3), // speed
+                    Constraint::Length(3), // navbar
+                    Constraint::Length(3), // WPM
                     Constraint::Min(3),    // text
                     Constraint::Length(1), // footer
                 ])
                 .split(size);
 
-            // Live average WPM
+            // Navbar
+            let titles = ["Time", "Words", "Zen"]
+                .iter()
+                .map(|t| Spans::from(*t))
+                .collect::<Vec<_>>();
+            let tabs = Tabs::new(titles)
+                .block(Block::default().borders(Borders::ALL).title("Mode"))
+                .style(Style::default().fg(Color::White))
+                .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+                .divider(Span::raw(" "))
+                .select(app.selected_tab);
+            f.render_widget(tabs, chunks[0]);
+
+            // WPM
             let wpm_para = Paragraph::new(format!("WPM: {:.1}", app.wpm()))
                 .block(Block::default().borders(Borders::ALL).title("Speed"));
-            f.render_widget(wpm_para, chunks[0]);
+            f.render_widget(wpm_para, chunks[1]);
 
-            // Compute current cursor position
-            let current = app
-                .status
-                .iter()
+            // Text with marker
+            let current = app.status.iter()
                 .position(|&s| s == Status::Untyped)
                 .unwrap_or(app.status.len());
-
-            // Sentence with per-char coloring & marker
-            let spans: Vec<Span> = app
-                .target
-                .chars()
+            let spans: Vec<Span> = app.target.chars()
                 .zip(app.status.iter().cloned())
                 .enumerate()
                 .map(|(idx, (ch, st))| {
                     let style = if idx == current {
-                        Style::default()
-                            .fg(Color::Black)
-                            .bg(Color::Yellow)
-                            .add_modifier(Modifier::BOLD)
+                        Style::default().fg(Color::Black).bg(Color::Yellow).add_modifier(Modifier::BOLD)
                     } else {
                         match st {
                             Status::Untyped => Style::default().fg(Color::White),
@@ -150,38 +135,38 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .collect();
             let text = Paragraph::new(Spans::from(spans))
                 .block(Block::default().borders(Borders::ALL).title("Text"));
-            f.render_widget(text, chunks[1]);
+            f.render_widget(text, chunks[2]);
 
-            // Footer: elapsed time
+            // Footer
             let footer = Paragraph::new(format!("Elapsed: {}s", app.elapsed_secs()))
                 .block(Block::default().borders(Borders::ALL));
-            f.render_widget(footer, chunks[2]);
+            f.render_widget(footer, chunks[3]);
         })?;
 
-        // Input handling
         let timeout = tick_rate.checked_sub(last_tick.elapsed()).unwrap_or_default();
         if event::poll(timeout)? {
             if let Event::Key(KeyEvent { code, modifiers, .. }) = event::read()? {
-                if code == KeyCode::Esc
-                    || (code == KeyCode::Char('c') && modifiers.contains(KeyModifiers::CONTROL))
-                {
+                // Quit
+                if code == KeyCode::Esc ||
+                   (code == KeyCode::Char('c') && modifiers.contains(KeyModifiers::CONTROL)) {
                     break;
                 }
+                // Tab switching or typing
                 if let KeyCode::Char(c) = code {
-                    app.on_key(c);
-                    if app.is_done() {
-                        break;
+                    match c {
+                        '1' => app.selected_tab = 0,
+                        '2' => app.selected_tab = 1,
+                        '3' => app.selected_tab = 2,
+                        _   => { app.on_key(c); if app.is_done() { break } }
                     }
                 }
             }
         }
-
         if last_tick.elapsed() >= tick_rate {
             last_tick = Instant::now();
         }
     }
 
-    // 4) Restore terminal and final stats
     disable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, LeaveAlternateScreen)?;
@@ -190,9 +175,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         app.elapsed_secs(),
         app.wpm()
     );
-
     Ok(())
 }
+
+// … load_words() and generate_sentence() as before …
+
 
 /// Load words or use embedded fallback
 fn load_words() -> io::Result<Vec<String>> {
