@@ -2,7 +2,7 @@
 
 use std::{
     error::Error,
-    fs::{self, File},
+    fs::File,
     io::{self, BufRead, BufReader},
     path::PathBuf,
     time::{Duration, Instant},
@@ -16,25 +16,26 @@ use crossterm::{
 use tui::{
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout},
-    style::{Color, Style},
+    style::{Color, Modifier, Style},
     text::{Span, Spans},
     widgets::{Block, Borders, Paragraph},
     Terminal,
 };
 
 /// Per-character typing status
-#[derive(Clone, Copy)]
+#[derive(PartialEq, Clone, Copy)]
 enum Status {
     Untyped,
     Correct,
     Incorrect,
 }
 
-/// The application state
+/// Application state
 struct App {
     target: String,
     status: Vec<Status>,
     start: Instant,
+    typed_count: usize,
 }
 
 impl App {
@@ -44,12 +45,14 @@ impl App {
             target,
             status: vec![Status::Untyped; len],
             start: Instant::now(),
+            typed_count: 0,
         }
     }
 
-    /// Handle one keypress
+    /// Handle a keypress: increment count and update status
     fn on_key(&mut self, key: char) {
-        if let Some(i) = self.status.iter().position(|s| matches!(s, Status::Untyped)) {
+        self.typed_count += 1;
+        if let Some(i) = self.status.iter().position(|&s| s == Status::Untyped) {
             let expected = self.target.chars().nth(i).unwrap();
             self.status[i] = if key == expected {
                 Status::Correct
@@ -59,26 +62,21 @@ impl App {
         }
     }
 
-    /// Have we finished the sentence?
+    /// Finished?
     fn is_done(&self) -> bool {
-        !self.status.iter().any(|s| matches!(s, Status::Untyped))
+        !self.status.iter().any(|&s| s == Status::Untyped)
     }
 
-    /// Seconds elapsed since start
+    /// Seconds elapsed
     fn elapsed_secs(&self) -> u64 {
         self.start.elapsed().as_secs()
     }
 
-    /// Compute WPM = (typed_chars/5) / (minutes elapsed)
+    /// WPM over entire session
     fn wpm(&self) -> f64 {
-        let typed = self
-            .status
-            .iter()
-            .filter(|&&s| s != Status::Untyped)
-            .count() as f64;
-        let mins = self.start.elapsed().as_secs_f64() / 60.0;
-        if mins > 0.0 {
-            (typed / 5.0) / mins
+        let minutes = self.start.elapsed().as_secs_f64() / 60.0;
+        if minutes > 0.0 {
+            (self.typed_count as f64 / 5.0) / minutes
         } else {
             0.0
         }
@@ -86,84 +84,89 @@ impl App {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    // 1) Load word list → generate sentence
+    // 1) Prepare sentence
     let words = load_words()?;
     let sentence = generate_sentence(&words, 30);
     let mut app = App::new(sentence);
 
-    // 2) Enter raw mode + alternate screen
+    // 2) Enter raw mode & alt screen
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    // 3) Main event loop with periodic redraws
+    // 3) Event loop
     let tick_rate = Duration::from_millis(200);
     let mut last_tick = Instant::now();
 
     loop {
-        // Draw the UI
         terminal.draw(|f| {
             let size = f.size();
-            // Four vertical chunks: header, WPM, text, footer
+            // 3 chunks: speed (3), text (min 3), footer (1)
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .margin(1)
                 .constraints([
-                    Constraint::Length(2), // header
-                    Constraint::Length(1), // wpm
+                    Constraint::Length(3), // speed
                     Constraint::Min(3),    // text
                     Constraint::Length(1), // footer
                 ])
                 .split(size);
 
-            // Header
-            let header = Paragraph::new("Type the sentence below as fast and accurately as you can!  (Esc or Ctrl+C to quit)")
-                .block(Block::default().borders(Borders::ALL).title("Term-Typist"));
-            f.render_widget(header, chunks[0]);
-
-            // WPM display
+            // Live average WPM
             let wpm_para = Paragraph::new(format!("WPM: {:.1}", app.wpm()))
                 .block(Block::default().borders(Borders::ALL).title("Speed"));
-            f.render_widget(wpm_para, chunks[1]);
+            f.render_widget(wpm_para, chunks[0]);
 
-            // Sentence text, character-by-character colored
+            // Compute current cursor position
+            let current = app
+                .status
+                .iter()
+                .position(|&s| s == Status::Untyped)
+                .unwrap_or(app.status.len());
+
+            // Sentence with per-char coloring & marker
             let spans: Vec<Span> = app
                 .target
                 .chars()
-                .zip(&app.status)
-                .map(|(ch, st)| {
-                    let style = match st {
-                        Status::Untyped => Style::default().fg(Color::White),
-                        Status::Correct => Style::default().fg(Color::Green),
-                        Status::Incorrect => Style::default().fg(Color::Red),
+                .zip(app.status.iter().cloned())
+                .enumerate()
+                .map(|(idx, (ch, st))| {
+                    let style = if idx == current {
+                        Style::default()
+                            .fg(Color::Black)
+                            .bg(Color::Yellow)
+                            .add_modifier(Modifier::BOLD)
+                    } else {
+                        match st {
+                            Status::Untyped => Style::default().fg(Color::White),
+                            Status::Correct => Style::default().fg(Color::Green),
+                            Status::Incorrect => Style::default().fg(Color::Red),
+                        }
                     };
                     Span::styled(ch.to_string(), style)
                 })
                 .collect();
             let text = Paragraph::new(Spans::from(spans))
                 .block(Block::default().borders(Borders::ALL).title("Text"));
-            f.render_widget(text, chunks[2]);
+            f.render_widget(text, chunks[1]);
 
-            // Footer with elapsed time
+            // Footer: elapsed time
             let footer = Paragraph::new(format!("Elapsed: {}s", app.elapsed_secs()))
                 .block(Block::default().borders(Borders::ALL));
-            f.render_widget(footer, chunks[3]);
+            f.render_widget(footer, chunks[2]);
         })?;
 
-        // Handle input (with tick-based timeout)
+        // Input handling
         let timeout = tick_rate.checked_sub(last_tick.elapsed()).unwrap_or_default();
         if event::poll(timeout)? {
-            if let Event::Key(KeyEvent { code, modifiers }) = event::read()? {
-                // Ctrl+C or Esc to quit
-                if code == KeyCode::Char('c') && modifiers.contains(KeyModifiers::CONTROL) {
+            if let Event::Key(KeyEvent { code, modifiers, .. }) = event::read()? {
+                if code == KeyCode::Esc
+                    || (code == KeyCode::Char('c') && modifiers.contains(KeyModifiers::CONTROL))
+                {
                     break;
                 }
-                if code == KeyCode::Esc {
-                    break;
-                }
-                // Normal character
                 if let KeyCode::Char(c) = code {
                     app.on_key(c);
                     if app.is_done() {
@@ -178,34 +181,37 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
-    // 4) Restore terminal and exit
+    // 4) Restore terminal and final stats
     disable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, LeaveAlternateScreen)?;
-    println!("Final Time: {}s  ┃  Final WPM: {:.1}", app.elapsed_secs(), app.wpm());
+    println!(
+        "Final Time: {}s  ┃  Final WPM: {:.1}",
+        app.elapsed_secs(),
+        app.wpm()
+    );
+
     Ok(())
 }
 
-/// Load word list from `$XDG_DATA_HOME/term-typist/words/words.txt`,
-/// falling back to an embedded `words/words.txt` at compile time.
+/// Load words or use embedded fallback
 fn load_words() -> io::Result<Vec<String>> {
-    let mut data_path = dirs::data_dir().unwrap_or_else(|| PathBuf::from("."));
-    data_path.push("term-typist");
-    data_path.push("words");
-    data_path.push("words.txt");
+    let mut path = dirs::data_dir().unwrap_or_else(|| PathBuf::from("."));
+    path.push("term-typist");
+    path.push("words");
+    path.push("words.txt");
 
-    if data_path.exists() {
-        let file = File::open(data_path)?;
+    if path.exists() {
+        let file = File::open(path)?;
         let reader = BufReader::new(file);
         Ok(reader.lines().flatten().collect())
     } else {
-        // Embedded fallback
         let embedded = include_str!("../words/words.txt");
         Ok(embedded.lines().map(str::to_string).collect())
     }
 }
 
-/// Pick `n` random words and join them into a sentence
+/// Generate a random sentence of `n` words
 fn generate_sentence(words: &[String], n: usize) -> String {
     let mut rng = rand::thread_rng();
     words
