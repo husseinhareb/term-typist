@@ -16,24 +16,31 @@ use tui::{
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::{Span, Spans},
-    widgets::{Block, Borders, Paragraph, Tabs},
+    widgets::{Block, Borders, Paragraph, Tabs, Wrap},
     Terminal,
 };
 
 #[derive(PartialEq, Clone, Copy)]
-enum Status { Untyped, Correct, Incorrect }
+enum Status {
+    Untyped,
+    Correct,
+    Incorrect,
+}
 
-/// Two modes: View = nav only, Insert = typing & timer running
+/// Two modes: View = nav only; Insert = typing & timer running
 #[derive(PartialEq, Clone, Copy)]
-enum Mode { View, Insert }
+enum Mode {
+    View,
+    Insert,
+}
 
 struct App {
     target: String,
     status: Vec<Status>,
     start: Option<Instant>,
     typed_count: usize,
-    selected_tab: usize,   // 0=Time,1=Words,2=Zen
-    selected_value: usize, // index into the current mode's options
+    selected_tab: usize,   // 0=Time, 1=Words, 2=Zen
+    selected_value: usize, // index into current mode's options
     mode: Mode,
 }
 
@@ -65,11 +72,9 @@ impl App {
         !self.status.iter().any(|&s| s == Status::Untyped)
     }
 
-    /// Total elapsed seconds since Enter was hit
+    /// Seconds elapsed since Enter was pressed
     fn elapsed_secs(&self) -> u64 {
-        self.start
-            .map(|s| s.elapsed().as_secs())
-            .unwrap_or(0)
+        self.start.map(|s| s.elapsed().as_secs()).unwrap_or(0)
     }
 
     fn wpm(&self) -> f64 {
@@ -85,33 +90,38 @@ impl App {
         }
     }
 
+    /// Numeric options for each mode
     fn current_options(&self) -> &'static [u16] {
         match self.selected_tab {
-            0 => &[15, 30, 60, 100],
-            1 => &[10, 25, 50, 100],
-            _ => &[],
+            0 => &[15, 30, 60, 100],  // Time (seconds)
+            1 => &[10, 25, 50, 100],  // Words (count)
+            _ => &[],                 // Zen: no options
         }
     }
 }
 
+/// Library entry point (called from `main.rs`)
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
+    // 1) Prepare test sentence
     let words = load_words()?;
     let sentence = generate_sentence(&words, 30);
     let mut app = App::new(sentence);
 
+    // 2) Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
+    // 3) Main loop with periodic redraws
     let tick_rate = Duration::from_millis(200);
     let mut last_tick = Instant::now();
 
     'mainloop: loop {
         terminal.draw(|f| {
             let size = f.size();
-            // navbar(3), speed(3), text(min3), footer(1)
+            // Vertical layout: navbar, speed, text, footer
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .margin(1)
@@ -124,13 +134,13 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 .split(size);
 
             // --- Navbar ---
-            let navbar = chunks[0];
+            let nav = chunks[0];
             let nav_chunks = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([Constraint::Percentage(60), Constraint::Min(10)])
-                .split(navbar);
+                .split(nav);
 
-            // Tabs
+            // Mode tabs
             let titles = ["Time", "Words", "Zen"]
                 .iter()
                 .map(|t| Spans::from(*t))
@@ -138,25 +148,23 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             let tabs = Tabs::new(titles)
                 .block(Block::default().borders(Borders::ALL).title("Mode"))
                 .style(Style::default().fg(Color::White))
-                .highlight_style(
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD),
-                )
+                .highlight_style(Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD))
                 .divider(Span::raw(" "));
             f.render_widget(tabs.select(app.selected_tab), nav_chunks[0]);
 
-            // Separator + numeric options
+            // Separator + numeric selectors
             let opts = app.current_options();
             let mut spans = vec![Span::raw("| ")];
             for (i, &val) in opts.iter().enumerate() {
+                let s = val.to_string();
                 if i == app.selected_value {
-                    spans.push(Span::styled(
-                        val.to_string(),
-                        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
-                    ));
+                    spans.push(Span::styled(s, Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD)));
                 } else {
-                    spans.push(Span::raw(val.to_string()));
+                    spans.push(Span::raw(s));
                 }
                 spans.push(Span::raw(" "));
             }
@@ -164,7 +172,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 .block(Block::default().borders(Borders::ALL).title("Value"));
             f.render_widget(opts_para, nav_chunks[1]);
 
-            // --- Speed Panel (WPM | Timer) ---
+            // --- Speed panel: WPM | Timer ---
             let speed_chunks = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
@@ -175,46 +183,40 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 .block(Block::default().borders(Borders::ALL).title("WPM"));
             f.render_widget(wpm_para, speed_chunks[0]);
 
-            // Timer/Counter
+            // Timer / counter
             let timer_text = if app.mode == Mode::Insert {
                 match app.selected_tab {
                     1 => {
-                        // Words: count typed words so far
-                        let idx = app
-                            .status
-                            .iter()
+                        // Words: how many typed
+                        let idx = app.status.iter()
                             .position(|&s| s == Status::Untyped)
                             .unwrap_or(app.status.len());
-                        let typed: String = app.target.chars().take(idx).collect();
+                        let typed = app.target.chars().take(idx).collect::<String>();
                         let count = typed.split_whitespace().count();
                         let total = app.current_options()[app.selected_value] as usize;
                         format!("Words: {}/{}", count, total)
                     }
                     0 => {
-                        // Time: countdown
-                        let total = app.current_options()[app.selected_value] as i64;
-                        let rem = (total - app.elapsed_secs() as i64).max(0);
+                        // Time: remaining
+                        let tot = app.current_options()[app.selected_value] as i64;
+                        let rem = (tot - app.elapsed_secs() as i64).max(0);
                         format!("Time: {}s", rem)
                     }
                     _ => String::new(),
                 }
             } else {
-                // View mode
+                // View mode prompt
                 "Press Enter to start".into()
             };
             let timer_para = Paragraph::new(timer_text)
                 .block(Block::default().borders(Borders::ALL).title("Timer"));
             f.render_widget(timer_para, speed_chunks[1]);
 
-            // --- Text Pane ---
-            let current = app
-                .status
-                .iter()
+            // --- Text pane (with wrapping) ---
+            let current = app.status.iter()
                 .position(|&s| s == Status::Untyped)
                 .unwrap_or(app.status.len());
-            let spans: Vec<Span> = app
-                .target
-                .chars()
+            let spans: Vec<Span> = app.target.chars()
                 .zip(app.status.iter().cloned())
                 .enumerate()
                 .map(|(i, (ch, st))| {
@@ -224,23 +226,22 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                         Status::Incorrect => Style::default().fg(Color::Red),
                     };
                     if i == current && app.mode == Mode::Insert {
-                        Span::styled(
-                            ch.to_string(),
-                            base.bg(Color::Yellow)
-                                .fg(Color::Black)
-                                .add_modifier(Modifier::BOLD),
-                        )
+                        Span::styled(ch.to_string(), base
+                            .bg(Color::Yellow)
+                            .fg(Color::Black)
+                            .add_modifier(Modifier::BOLD))
                     } else {
                         Span::styled(ch.to_string(), base)
                     }
                 })
                 .collect();
-            let text = Paragraph::new(Spans::from(spans))
-                .block(Block::default().borders(Borders::ALL).title("Text"));
-            f.render_widget(text, chunks[2]);
+            let text_para = Paragraph::new(Spans::from(spans))
+                .block(Block::default().borders(Borders::ALL).title("Text"))
+                .wrap(Wrap { trim: true });
+            f.render_widget(text_para, chunks[2]);
 
-            // --- Footer (Total Elapsed) ---
-            let footer_text = if let Mode::Insert = app.mode {
+            // --- Footer (total elapsed) ---
+            let footer_text = if app.mode == Mode::Insert {
                 format!("Elapsed: {}s", app.elapsed_secs())
             } else {
                 "".into()
@@ -250,7 +251,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             f.render_widget(footer, chunks[3]);
         })?;
 
-        // INPUT & TICK
+        // Handle input & ticking
         let timeout = tick_rate.checked_sub(last_tick.elapsed()).unwrap_or_default();
         if event::poll(timeout)? {
             if let Event::Key(KeyEvent { code, modifiers, .. }) = event::read()? {
@@ -276,7 +277,6 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     }
                     KeyCode::Enter if app.mode == Mode::View => {
-                        // start the test
                         app.mode = Mode::Insert;
                         app.start = Some(Instant::now());
                     }
@@ -295,7 +295,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // CLEANUP
+    // Restore terminal
     disable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, LeaveAlternateScreen)?;
@@ -307,7 +307,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Load words from config or embedded fallback
+/// Load words from config dir or fallback to embedded
 fn load_words() -> io::Result<Vec<String>> {
     let mut path = dirs::data_dir().unwrap_or_else(|| PathBuf::from("."));
     path.push("term-typist/words/words.txt");
