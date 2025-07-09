@@ -1,6 +1,6 @@
-use std::io::{self, Write};
+use std::io::{ self, Write };
 use std::thread;
-use std::time::{Instant, Duration};
+use std::time::{ Instant, Duration };
 use termion::input::TermRead;
 use termion::raw::IntoRawMode;
 use termion::cursor::DetectCursorPos;
@@ -45,7 +45,7 @@ pub fn listen_for_alphabets() {
             thread::sleep(Duration::from_secs(1));
         }
     });
-    
+
     for key in stdin.keys() {
         match key {
             Ok(key_event) => {
@@ -54,12 +54,10 @@ pub fn listen_for_alphabets() {
                         if i > 0 {
                             i -= 1;
                             char_status[i] = 'N';
-                            
                         }
-
                     }
                     termion::event::Key::Char(c) => {
-                        if c == '.'{
+                        if c == '.' {
                             break;
                         }
                         if c == ' ' {
@@ -95,8 +93,8 @@ pub fn listen_for_alphabets() {
                     colored_text.push(char);
                 }
                 colored_text.push_str(WHITE);
-                print!("\r{}", colored_text); 
-                io::stdout().flush().unwrap();      
+                print!("\r{}", colored_text);
+                io::stdout().flush().unwrap();
             }
             Err(err) => {
                 eprintln!("Error reading input: {}", err);

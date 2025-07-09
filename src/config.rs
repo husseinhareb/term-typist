@@ -1,6 +1,6 @@
-use std::fs::{self, File};
+use std::fs::{ self, File };
 use std::path::PathBuf;
-use std::io::{self, prelude::*, BufRead, Write,BufReader};
+use std::io::{ self, prelude::*, BufRead, Write, BufReader };
 
 pub fn create_config() -> std::io::Result<()> {
     let config_dir = dirs::config_dir().expect("Unable to determine config directory");
@@ -61,12 +61,18 @@ pub fn read_nb_of_words() -> io::Result<i32> {
     for line in reader.lines() {
         let line = line?;
         if line.trim().starts_with("nb_of_words") {
-            let nb_cmds_str = line.split_whitespace().skip(1).next().ok_or_else(|| {
-                io::Error::new(io::ErrorKind::InvalidData, "Invalid format for nb_of_words")
-            })?;
-            let nb_cmds = nb_cmds_str.parse::<i32>().map_err(|_| {
-                io::Error::new(io::ErrorKind::InvalidData, "Failed to parse nb_of_words")
-            })?;
+            let nb_cmds_str = line
+                .split_whitespace()
+                .skip(1)
+                .next()
+                .ok_or_else(|| {
+                    io::Error::new(io::ErrorKind::InvalidData, "Invalid format for nb_of_words")
+                })?;
+            let nb_cmds = nb_cmds_str
+                .parse::<i32>()
+                .map_err(|_| {
+                    io::Error::new(io::ErrorKind::InvalidData, "Failed to parse nb_of_words")
+                })?;
             return Ok(nb_cmds);
         }
     }
@@ -75,13 +81,13 @@ pub fn read_nb_of_words() -> io::Result<i32> {
     Ok(30)
 }
 
-
-
 // Function to get the path of the config file
 fn config_file() -> Result<PathBuf, io::Error> {
     let config_dir = match dirs::config_dir() {
         Some(path) => path,
-        None => return Err(io::Error::new(io::ErrorKind::NotFound, "Config directory not found")),
+        None => {
+            return Err(io::Error::new(io::ErrorKind::NotFound, "Config directory not found"));
+        }
     };
 
     let file_path = config_dir.join("term-typist").join("term-typist.conf");
@@ -89,17 +95,9 @@ fn config_file() -> Result<PathBuf, io::Error> {
 }
 
 fn folder_exists(folder_path: &PathBuf) -> bool {
-    if let Ok(metadata) = std::fs::metadata(folder_path) {
-        metadata.is_dir()
-    } else {
-        false
-    }
+    if let Ok(metadata) = std::fs::metadata(folder_path) { metadata.is_dir() } else { false }
 }
 
 fn file_exists(file_path: &PathBuf) -> bool {
-    if let Ok(metadata) = std::fs::metadata(file_path) {
-        metadata.is_file()
-    } else {
-        false
-    }
+    if let Ok(metadata) = std::fs::metadata(file_path) { metadata.is_file() } else { false }
 }

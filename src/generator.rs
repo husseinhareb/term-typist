@@ -1,22 +1,17 @@
 use std::env;
 use std::fs::File;
-use std::io::{self, BufRead};
+use std::io::{ self, BufRead };
 use std::path::PathBuf;
-use rand::seq::SliceRandom; 
-
-
+use rand::seq::SliceRandom;
 
 fn read_words() -> io::Result<Vec<String>> {
     let mut file_path = PathBuf::new();
-    
+
     if let Some(home_dir) = env::var_os("HOME") {
         file_path.push(home_dir);
         file_path.push(".local/share/term-typist/words/words.txt");
     } else {
-        return Err(io::Error::new(
-            io::ErrorKind::NotFound,
-            "HOME environment variable not found",
-        ));
+        return Err(io::Error::new(io::ErrorKind::NotFound, "HOME environment variable not found"));
     }
 
     let file = File::open(&file_path)?;
@@ -31,7 +26,6 @@ fn read_words() -> io::Result<Vec<String>> {
 
     Ok(words)
 }
-
 
 pub fn generate_random_sentence(num_words: usize) -> String {
     let words = match read_words() {
@@ -53,4 +47,3 @@ pub fn generate_random_sentence(num_words: usize) -> String {
 
     sentence.trim().to_string()
 }
-
