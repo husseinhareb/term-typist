@@ -25,8 +25,9 @@ enum Status {
 /// Two modes: View = nav only; Insert = typing & timer running
 #[derive(PartialEq, Clone, Copy)]
 enum Mode {
-    View,
-    Insert,
+    View,     // before start
+    Insert,   // test in progress
+    Finished, // test completed
 }
 
 struct App {
@@ -96,24 +97,27 @@ impl App {
 
 /// Library entry point (called from `main.rs`)
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
-    // 1) Prepare test sentence
-    let words = load_words()?;
-    let sentence = generate_sentence(&words, 30);
-    let mut app = App::new(sentence);
-
-    // 2) Setup terminal
+    // Prepare terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    // 3) Main loop with periodic redraws
+    // Tick rate for UI refresh
     let tick_rate = Duration::from_millis(200);
     let mut last_tick = Instant::now();
 
+    // Helper to reset the App state
+    let mut make_app = || {
+        let words = load_words().expect("Failed to load words");
+        let sentence = generate_sentence(&words, 30);
+        App::new(sentence)
+    };
+    let mut app = make_app();
+
     'mainloop: loop {
-        // Draw UI
+        // Draw the UI
         terminal.draw(|f| {
             let size = f.size();
             let chunks = Layout::default()
@@ -132,6 +136,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 .direction(Direction::Horizontal)
                 .constraints([Constraint::Percentage(60), Constraint::Min(10)])
                 .split(chunks[0]);
+
             let titles = ["Time", "Words", "Zen"]
                 .iter()
                 .map(|t| Spans::from(*t))
@@ -175,37 +180,45 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             );
             f.render_widget(wpm_para, speed_chunks[0]);
 
-            let timer_text = if app.mode == Mode::Insert {
-                match app.selected_tab {
-                    0 => {
-                        // Time mode countdown
-                        let total = app.current_options()[app.selected_value] as i64;
-                        let rem = (total - (app.elapsed_secs() as i64)).max(0);
-                        format!("Time left: {}s", rem)
+            let timer_text = match app.mode {
+                Mode::View => "Press Enter to start".into(),
+                Mode::Insert =>
+                    match app.selected_tab {
+                        0 => {
+                            // Time mode countdown
+                            let total = app.current_options()[app.selected_value] as i64;
+                            let rem = (total - (app.elapsed_secs() as i64)).max(0);
+                            format!("Time left: {}s", rem)
+                        }
+                        1 => {
+                            // Words mode count
+                            let idx = app.status
+                                .iter()
+                                .position(|&s| s == Status::Untyped)
+                                .unwrap_or(app.status.len());
+                            let typed = app.target.chars().take(idx).collect::<String>();
+                            let count = typed.split_whitespace().count();
+                            let total = app.current_options()[app.selected_value] as usize;
+                            format!("Words: {}/{}", count, total)
+                        }
+                        _ => String::new(),
                     }
-                    1 => {
-                        // Words mode count
-                        let idx = app.status
-                            .iter()
-                            .position(|&s| s == Status::Untyped)
-                            .unwrap_or(app.status.len());
-                        let typed = app.target.chars().take(idx).collect::<String>();
-                        let count = typed.split_whitespace().count();
-                        let total = app.current_options()[app.selected_value] as usize;
-                        format!("Words: {}/{}", count, total)
-                    }
-                    _ => String::new(),
+                Mode::Finished => {
+                    // Final status line
+                    format!(
+                        "🏁 Done! Time: {}s • WPM: {:.1} • Esc=Restart, Ctrl+C=Quit",
+                        app.elapsed_secs(),
+                        app.wpm()
+                    )
                 }
-            } else {
-                // View mode prompt
-                "Press Enter to start".into()
             };
             let timer_para = Paragraph::new(timer_text).block(
                 Block::default().borders(Borders::ALL).title("Timer")
             );
             f.render_widget(timer_para, speed_chunks[1]);
 
-            // --- Text pane with wrapping and marker ---
+            // --- Text pane with wrapping and current marker ---
+            let text_chunks = chunks[2];
             let current = app.status
                 .iter()
                 .position(|&s| s == Status::Untyped)
@@ -233,91 +246,83 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             let text_para = Paragraph::new(Spans::from(spans))
                 .block(Block::default().borders(Borders::ALL).title("Text"))
                 .wrap(Wrap { trim: true });
-            f.render_widget(text_para, chunks[2]);
+            f.render_widget(text_para, text_chunks);
 
-            // --- Footer (elapsed total) ---
-            let footer = Paragraph::new(match app.mode {
+            // --- Footer ---
+            let footer_text = match app.mode {
                 Mode::Insert => format!("Elapsed: {}s", app.elapsed_secs()),
-                Mode::View => String::new(),
-            }).block(Block::default().borders(Borders::ALL).title("Elapsed"));
+                _ => String::new(),
+            };
+            let footer = Paragraph::new(footer_text).block(
+                Block::default().borders(Borders::ALL).title("Elapsed")
+            );
             f.render_widget(footer, chunks[3]);
         })?;
 
-        // Handle input & automatic stop conditions
+        // Handle input & state transitions
         let timeout = tick_rate.checked_sub(last_tick.elapsed()).unwrap_or_default();
         if event::poll(timeout)? {
             if let Event::Key(KeyEvent { code, modifiers, .. }) = event::read()? {
-                // Quit keys
-                if
-                    code == KeyCode::Esc ||
-                    (code == KeyCode::Char('c') && modifiers.contains(KeyModifiers::CONTROL))
-                {
+                // Ctrl+C always quits
+                if code == KeyCode::Char('c') && modifiers.contains(KeyModifiers::CONTROL) {
                     break 'mainloop;
                 }
-                match code {
-                    KeyCode::Char('1') => {
-                        app.selected_tab = 0;
-                        app.selected_value = 0;
-                    }
-                    KeyCode::Char('2') => {
-                        app.selected_tab = 1;
-                        app.selected_value = 0;
-                    }
-                    KeyCode::Char('3') => {
-                        app.selected_tab = 2;
-                        app.selected_value = 0;
-                    }
-                    KeyCode::Left => {
-                        if app.selected_value > 0 && !app.current_options().is_empty() {
-                            app.selected_value -= 1;
+                // Esc always restarts
+                if code == KeyCode::Esc {
+                    app = make_app();
+                    continue 'mainloop;
+                }
+                match app.mode {
+                    Mode::View => {
+                        if code == KeyCode::Enter {
+                            app.mode = Mode::Insert;
+                            app.start = Some(Instant::now());
+                        } else {
+                            handle_nav_keys(&mut app, code);
                         }
                     }
-                    KeyCode::Right => {
-                        let len = app.current_options().len();
-                        if app.selected_value + 1 < len {
-                            app.selected_value += 1;
-                        }
-                    }
-                    KeyCode::Enter if app.mode == Mode::View => {
-                        // Start the test
-                        app.mode = Mode::Insert;
-                        app.start = Some(Instant::now());
-                    }
-                    KeyCode::Char(c) if app.mode == Mode::Insert => {
-                        // Record keystroke
-                        app.on_key(c);
-
-                        // Auto-stop for Words mode
-                        if app.selected_tab == 1 {
-                            let idx = app.status
-                                .iter()
-                                .position(|&s| s == Status::Untyped)
-                                .unwrap_or(app.status.len());
-                            let typed = app.target.chars().take(idx).collect::<String>();
-                            let count = typed.split_whitespace().count();
-                            let total = app.current_options()[app.selected_value] as usize;
-                            if count >= total {
-                                break 'mainloop;
+                    Mode::Insert => {
+                        if let KeyCode::Char(c) = code {
+                            app.on_key(c);
+                            // Auto-stop word mode
+                            if app.selected_tab == 1 {
+                                let idx = app.status
+                                    .iter()
+                                    .position(|&s| s == Status::Untyped)
+                                    .unwrap_or(app.status.len());
+                                let typed = app.target.chars().take(idx).collect::<String>();
+                                let count = typed.split_whitespace().count();
+                                let total = app.current_options()[app.selected_value] as usize;
+                                if count >= total {
+                                    app.mode = Mode::Finished;
+                                    continue;
+                                }
                             }
-                        }
-                        // Auto-stop for Time mode
-                        if app.selected_tab == 0 {
-                            let total = app.current_options()[app.selected_value] as u64;
-                            if app.elapsed_secs() >= total {
-                                break 'mainloop;
+                            // Auto-stop time mode
+                            if app.selected_tab == 0 {
+                                let total = app.current_options()[app.selected_value] as u64;
+                                if app.elapsed_secs() >= total {
+                                    app.mode = Mode::Finished;
+                                    continue;
+                                }
                             }
+                        } else {
+                            handle_nav_keys(&mut app, code);
                         }
                     }
-                    _ => {}
+                    Mode::Finished => {
+                        // Only allow navigation in finished state
+                        handle_nav_keys(&mut app, code);
+                    }
                 }
             }
         }
 
-        // Also stop if countdown expired without new key
+        // Also auto-stop time mode even w/o key events
         if app.mode == Mode::Insert && app.selected_tab == 0 {
             let total = app.current_options()[app.selected_value] as u64;
             if app.elapsed_secs() >= total {
-                break 'mainloop;
+                app.mode = Mode::Finished;
             }
         }
 
@@ -326,12 +331,32 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // Cleanup and final stats
+    // Restore terminal & print final summary
     disable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, LeaveAlternateScreen)?;
     println!("Final Time: {}s  ┃  Final WPM: {:.1}", app.elapsed_secs(), app.wpm());
     Ok(())
+}
+
+fn handle_nav_keys(app: &mut App, code: KeyCode) {
+    match code {
+        KeyCode::Char('1') => { app.selected_tab = 0; app.selected_value = 0; }
+        KeyCode::Char('2') => { app.selected_tab = 1; app.selected_value = 0; }
+        KeyCode::Char('3') => { app.selected_tab = 2; app.selected_value = 0; }
+        KeyCode::Left => {
+            if app.selected_value > 0 && !app.current_options().is_empty() {
+                app.selected_value -= 1;
+            }
+        }
+        KeyCode::Right => {
+            let len = app.current_options().len();
+            if app.selected_value + 1 < len {
+                app.selected_value += 1;
+            }
+        }
+        _ => {}
+    }
 }
 
 /// Load words from config dir or fallback to embedded

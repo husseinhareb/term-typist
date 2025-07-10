@@ -1,3 +1,4 @@
+// src/ui.rs
 use std::io::{ self, Write };
 use std::thread;
 use std::time::{ Instant, Duration };

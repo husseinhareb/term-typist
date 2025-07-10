@@ -1,3 +1,4 @@
+// src/wpm.rs
 use std::time::{ SystemTime, Duration };
 use std::io::{ self, Write };
 pub fn elapsed_seconds_since_start(start_time: SystemTime) -> f64 {
