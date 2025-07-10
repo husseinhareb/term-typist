@@ -20,8 +20,9 @@ use tui::{
     Terminal,
 };
 
-mod graph; // our new module for the line chart
-
+mod graph; 
+mod wpm;
+use wpm::{elapsed_seconds_since_start, gross_wpm, net_wpm, accuracy};
 #[derive(PartialEq, Clone, Copy)]
 enum Status {
     Untyped,
