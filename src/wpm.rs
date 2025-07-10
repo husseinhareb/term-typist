@@ -7,15 +7,6 @@ pub fn elapsed_seconds_since_start(start: Instant) -> f64 {
     start.elapsed().as_secs_f64()
 }
 
-/// Gross WPM: total keystrokes (correct + incorrect) ÷ 5, divided by minutes.
-pub fn gross_wpm(chars_typed: usize, elapsed_secs: f64) -> f64 {
-    if elapsed_secs <= 0.0 {
-        return 0.0;
-    }
-    let minutes = elapsed_secs / 60.0;
-    (chars_typed as f64 / 5.0) / minutes
-}
-
 /// Net WPM: (correct_chars – incorrect_chars) ÷ 5, divided by minutes, floored at zero.
 /// This mirrors MonkeyType’s “word” penalty: each wrong keystroke cancels one correct one.
 pub fn net_wpm(correct_chars: usize, incorrect_chars: usize, elapsed_secs: f64) -> f64 {
