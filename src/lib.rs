@@ -1,28 +1,26 @@
-use std::{
-    fs::File,
-    io::{self, BufRead, BufReader},
-    path::PathBuf,
-    time::{Duration, Instant},
-};
+// src/lib.rs
+
+use std::{ fs::File, io::{ self, BufRead, BufReader }, path::PathBuf, time::{ Duration, Instant } };
 use rand::seq::SliceRandom;
 
 use crossterm::{
-    event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
+    event::{ self, Event, KeyCode, KeyEvent, KeyModifiers },
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{ disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen },
 };
 use tui::{
     backend::CrosstermBackend,
-    layout::{Constraint, Direction, Layout},
-    style::{Color, Modifier, Style},
-    text::{Span, Spans},
-    widgets::{Block, Borders, Paragraph, Tabs, Wrap},
+    layout::{ Constraint, Direction, Layout },
+    style::{ Color, Modifier, Style },
+    text::{ Span, Spans },
+    widgets::{ Block, Borders, Paragraph, Tabs, Wrap },
     Terminal,
 };
 
-mod graph; 
+mod graph;
 mod wpm;
-use wpm::{elapsed_seconds_since_start, gross_wpm, net_wpm, accuracy};
+use wpm::{ elapsed_seconds_since_start, net_wpm, accuracy };
+
 #[derive(PartialEq, Clone, Copy)]
 enum Status {
     Untyped,
@@ -32,8 +30,8 @@ enum Status {
 
 #[derive(PartialEq, Clone, Copy)]
 enum Mode {
-    View,     // before start
-    Insert,   // test running
+    View, // before start
+    Insert, // test running
     Finished, // test done
 }
 
@@ -41,11 +39,12 @@ struct App {
     target: String,
     status: Vec<Status>,
     start: Option<Instant>,
-    typed_count: usize,
-    selected_tab: usize,    // 0=Time,1=Words,2=Zen
-    selected_value: usize,  // index into mode options
+    correct_chars: usize,
+    incorrect_chars: usize,
+    selected_tab: usize, // 0=Time,1=Words,2=Zen
+    selected_value: usize, // index into mode options
     mode: Mode,
-    samples: Vec<(u64, f64)>, // (second, wpm) samples
+    samples: Vec<(u64, f64)>, // (second, net_wpm) samples
 }
 
 impl App {
@@ -55,7 +54,8 @@ impl App {
             target,
             status: vec![Status::Untyped; len],
             start: None,
-            typed_count: 0,
+            correct_chars: 0,
+            incorrect_chars: 0,
             selected_tab: 0,
             selected_value: 0,
             mode: Mode::View,
@@ -64,14 +64,15 @@ impl App {
     }
 
     fn on_key(&mut self, key: char) {
-        self.typed_count += 1;
         if let Some(i) = self.status.iter().position(|&s| s == Status::Untyped) {
             let expected = self.target.chars().nth(i).unwrap();
-            self.status[i] = if key == expected {
-                Status::Correct
+            let is_correct = key == expected;
+            self.status[i] = if is_correct { Status::Correct } else { Status::Incorrect };
+            if is_correct {
+                self.correct_chars += 1;
             } else {
-                Status::Incorrect
-            };
+                self.incorrect_chars += 1;
+            }
         }
     }
 
@@ -79,30 +80,17 @@ impl App {
         self.start.map(|s| s.elapsed().as_secs()).unwrap_or(0)
     }
 
-    fn wpm(&self) -> f64 {
-        if let Some(s) = self.start {
-            let mins = s.elapsed().as_secs_f64() / 60.0;
-            if mins > 0.0 {
-                (self.typed_count as f64 / 5.0) / mins
-            } else {
-                0.0
-            }
-        } else {
-            0.0
-        }
-    }
-
     fn current_options(&self) -> &'static [u16] {
         match self.selected_tab {
-            0 => &[15, 30, 60, 100], // seconds
-            1 => &[10, 25, 50, 100], // words
-            _ => &[],                // Zen
+            0 => &[15, 30, 60, 100],
+            1 => &[10, 25, 50, 100],
+            _ => &[],
         }
     }
 }
 
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
-    // Terminal setup
+    // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
@@ -113,7 +101,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut last_tick = Instant::now();
     let mut last_sample_sec = 0;
 
-    // Factory to (re)create App
+    // App factory
     let mut make_app = || {
         let words = load_words().expect("load_words failed");
         let sentence = generate_sentence(&words, 30);
@@ -122,17 +110,17 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut app = make_app();
 
     'mainloop: loop {
-        // === Draw UI ===
+        // Draw UI
         terminal.draw(|f| {
             let size = f.size();
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .margin(1)
                 .constraints([
-                    Constraint::Length(3), // navbar
-                    Constraint::Length(3), // speed
-                    Constraint::Min(3),    // text
-                    Constraint::Length(1), // footer
+                    Constraint::Length(3),
+                    Constraint::Length(3),
+                    Constraint::Min(3),
+                    Constraint::Length(1),
                 ])
                 .split(size);
 
@@ -141,6 +129,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 .direction(Direction::Horizontal)
                 .constraints([Constraint::Percentage(60), Constraint::Min(10)])
                 .split(chunks[0]);
+
             let titles = ["Time", "Words", "Zen"]
                 .iter()
                 .map(|t| Spans::from(*t))
@@ -148,29 +137,28 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             let tabs = Tabs::new(titles)
                 .block(Block::default().borders(Borders::ALL).title("Mode"))
                 .style(Style::default().fg(Color::White))
-                .highlight_style(
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD),
-                )
+                .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
                 .divider(Span::raw(" "));
             f.render_widget(tabs.select(app.selected_tab), nav[0]);
 
-            let mut spans = vec![Span::raw("| ")];
+            let mut opts_spans = vec![Span::raw("| ")];
             for (i, &v) in app.current_options().iter().enumerate() {
                 let txt = v.to_string();
                 if i == app.selected_value {
-                    spans.push(Span::styled(
-                        txt,
-                        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
-                    ));
+                    opts_spans.push(
+                        Span::styled(
+                            txt,
+                            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                        )
+                    );
                 } else {
-                    spans.push(Span::raw(txt));
+                    opts_spans.push(Span::raw(txt));
                 }
-                spans.push(Span::raw(" "));
+                opts_spans.push(Span::raw(" "));
             }
-            let sel = Paragraph::new(Spans::from(spans))
-                .block(Block::default().borders(Borders::ALL).title("Value"));
+            let sel = Paragraph::new(Spans::from(opts_spans)).block(
+                Block::default().borders(Borders::ALL).title("Value")
+            );
             f.render_widget(sel, nav[1]);
 
             // Speed panel
@@ -178,52 +166,74 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 .direction(Direction::Horizontal)
                 .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
                 .split(chunks[1]);
+
+            // Compute net WPM + accuracy
+            let (net, acc) = if let Some(start) = app.start {
+                let secs = elapsed_seconds_since_start(start);
+                (
+                    net_wpm(app.correct_chars, app.incorrect_chars, secs),
+                    accuracy(app.correct_chars, app.incorrect_chars),
+                )
+            } else {
+                // before Enter→Insert, show dashes
+                (0.0, 0.0)
+            };
+
+            let speed_text = if app.mode == Mode::View {
+                "WPM: --  Acc: --%".into()
+            } else {
+                format!("WPM: {:.1}  Acc: {:.0}%", net, acc)
+            };
+
             f.render_widget(
-                Paragraph::new(format!("WPM: {:.1}", app.wpm()))
-                    .block(Block::default().borders(Borders::ALL).title("WPM")),
-                speed[0],
+                Paragraph::new(speed_text).block(
+                    Block::default().borders(Borders::ALL).title("Speed")
+                ),
+                speed[0]
             );
 
+            // Timer / count / summary
             let timer_txt = match app.mode {
-                Mode::View => "Enter to start".into(),
-                Mode::Insert => match app.selected_tab {
-                    0 => {
-                        let tot = app.current_options()[app.selected_value] as i64;
-                        let rem = (tot - app.elapsed_secs() as i64).max(0);
-                        format!("Time left: {}s", rem)
+                Mode::View => "Press Enter to start".into(),
+                Mode::Insert =>
+                    match app.selected_tab {
+                        0 => {
+                            let total = app.current_options()[app.selected_value] as i64;
+                            let rem = (total - (app.elapsed_secs() as i64)).max(0);
+                            format!("Time left: {}s", rem)
+                        }
+                        1 => {
+                            let idx = app.status
+                                .iter()
+                                .position(|&s| s == Status::Untyped)
+                                .unwrap_or(app.status.len());
+                            let typed = app.target.chars().take(idx).collect::<String>();
+                            let count = typed.split_whitespace().count();
+                            format!(
+                                "Words: {}/{}",
+                                count,
+                                app.current_options()[app.selected_value]
+                            )
+                        }
+                        2 => "Zen mode".into(),
+                        _ => String::new(),
                     }
-                    1 => {
-                        let idx = app
-                            .status
-                            .iter()
-                            .position(|&s| s == Status::Untyped)
-                            .unwrap_or(app.status.len());
-                        let typed = app.target.chars().take(idx).collect::<String>();
-                        let count = typed.split_whitespace().count();
-                        format!("Words: {}/{}", count, app.current_options()[app.selected_value])
-                    }
-                    2 => "Zen mode".into(),
-                    _ => String::new(),
-                },
-                Mode::Finished => format!(
-                    "🏁 Done! {}s • {:.1} WPM  Esc=Restart",
-                    app.elapsed_secs(),
-                    app.wpm()
-                ),
+                Mode::Finished =>
+                    format!("🏁 Done! {}s • {:.1} WPM  Esc=Restart", app.elapsed_secs(), net),
             };
             f.render_widget(
-                Paragraph::new(timer_txt).block(Block::default().borders(Borders::ALL).title("Timer")),
-                speed[1],
+                Paragraph::new(timer_txt).block(
+                    Block::default().borders(Borders::ALL).title("Timer")
+                ),
+                speed[1]
             );
 
             // Text pane
-            let current = app
-                .status
+            let current = app.status
                 .iter()
                 .position(|&s| s == Status::Untyped)
                 .unwrap_or(app.status.len());
-            let text_spans: Vec<Span> = app
-                .target
+            let text_spans: Vec<Span> = app.target
                 .chars()
                 .zip(app.status.iter().cloned())
                 .enumerate()
@@ -236,10 +246,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     if i == current && app.mode == Mode::Insert {
                         Span::styled(
                             ch.to_string(),
-                            style
-                                .bg(Color::Yellow)
-                                .fg(Color::Black)
-                                .add_modifier(Modifier::BOLD),
+                            style.bg(Color::Yellow).fg(Color::Black).add_modifier(Modifier::BOLD)
                         )
                     } else {
                         Span::styled(ch.to_string(), style)
@@ -250,7 +257,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 Paragraph::new(Spans::from(text_spans))
                     .block(Block::default().borders(Borders::ALL).title("Text"))
                     .wrap(Wrap { trim: true }),
-                chunks[2],
+                chunks[2]
             );
 
             // Footer
@@ -260,27 +267,27 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 String::new()
             };
             f.render_widget(
-                Paragraph::new(footer_txt)
-                    .block(Block::default().borders(Borders::ALL).title("Elapsed")),
-                chunks[3],
+                Paragraph::new(footer_txt).block(
+                    Block::default().borders(Borders::ALL).title("Elapsed")
+                ),
+                chunks[3]
             );
         })?;
 
-        // Handle input & transitions
+        // Input & logic
         let timeout = tick_rate.checked_sub(last_tick.elapsed()).unwrap_or_default();
         if event::poll(timeout)? {
             if let Event::Key(KeyEvent { code, modifiers, .. }) = event::read()? {
-                // Ctrl+C = quit
+                // Quit
                 if code == KeyCode::Char('c') && modifiers.contains(KeyModifiers::CONTROL) {
                     break 'mainloop;
                 }
-                // Esc = restart app
+                // Restart
                 if code == KeyCode::Esc {
                     app = make_app();
                     last_sample_sec = 0;
                     continue 'mainloop;
                 }
-
                 match app.mode {
                     Mode::View => {
                         if code == KeyCode::Enter {
@@ -293,22 +300,22 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     Mode::Insert => {
                         if let KeyCode::Char(c) = code {
                             app.on_key(c);
-                            // auto-finish time
-                            if app.selected_tab == 0
-                                && app.elapsed_secs() >= app.current_options()[app.selected_value] as u64
+                            // Auto-finish
+                            if
+                                app.selected_tab == 0 &&
+                                app.elapsed_secs() >=
+                                    (app.current_options()[app.selected_value] as u64)
                             {
                                 app.mode = Mode::Finished;
                             }
-                            // auto-finish words
                             if app.selected_tab == 1 {
-                                let idx = app
-                                    .status
+                                let idx = app.status
                                     .iter()
                                     .position(|&s| s == Status::Untyped)
                                     .unwrap_or(app.status.len());
                                 let typed = app.target.chars().take(idx).collect::<String>();
                                 let count = typed.split_whitespace().count();
-                                if count >= app.current_options()[app.selected_value] as usize {
+                                if count >= (app.current_options()[app.selected_value] as usize) {
                                     app.mode = Mode::Finished;
                                 }
                             }
@@ -316,27 +323,26 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                             handle_nav_keys(&mut app, code);
                         }
                     }
-                    Mode::Finished => {
-                        handle_nav_keys(&mut app, code);
-                    }
+                    Mode::Finished => handle_nav_keys(&mut app, code),
                 }
             }
         }
 
-        // Sample WPM once per second
+        // WPM sampling
         if app.mode == Mode::Insert {
             let sec = app.elapsed_secs();
             if sec > last_sample_sec {
                 last_sample_sec = sec;
-                app.samples.push((sec, app.wpm()));
+                let elapsed = elapsed_seconds_since_start(app.start.unwrap());
+                let net = net_wpm(app.correct_chars, app.incorrect_chars, elapsed);
+                app.samples.push((sec, net));
             }
         }
 
-        // On finish: show graph
+        // On finish → graph
         if app.mode == Mode::Finished {
             terminal.clear()?;
             terminal.draw(|f| graph::draw_wpm_chart(f, f.size(), &app.samples))?;
-            // wait for Esc or Ctrl+C
             loop {
                 if let Event::Key(KeyEvent { code, modifiers, .. }) = event::read()? {
                     if code == KeyCode::Esc {
@@ -359,15 +365,26 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     // Cleanup
     disable_raw_mode()?;
     execute!(io::stdout(), LeaveAlternateScreen)?;
-    println!("Final Time: {}s  ┃  Final WPM: {:.1}", app.elapsed_secs(), app.wpm());
+    let elapsed = elapsed_seconds_since_start(app.start.unwrap());
+    let final_net = net_wpm(app.correct_chars, app.incorrect_chars, elapsed);
+    println!("Final Time: {}s  ┃  Final WPM: {:.1}", app.elapsed_secs(), final_net);
     Ok(())
 }
 
 fn handle_nav_keys(app: &mut App, code: KeyCode) {
     match code {
-        KeyCode::Char('1') => { app.selected_tab = 0; app.selected_value = 0; }
-        KeyCode::Char('2') => { app.selected_tab = 1; app.selected_value = 0; }
-        KeyCode::Char('3') => { app.selected_tab = 2; app.selected_value = 0; }
+        KeyCode::Char('1') => {
+            app.selected_tab = 0;
+            app.selected_value = 0;
+        }
+        KeyCode::Char('2') => {
+            app.selected_tab = 1;
+            app.selected_value = 0;
+        }
+        KeyCode::Char('3') => {
+            app.selected_tab = 2;
+            app.selected_value = 0;
+        }
         KeyCode::Left => {
             if app.selected_value > 0 && !app.current_options().is_empty() {
                 app.selected_value -= 1;
@@ -383,7 +400,6 @@ fn handle_nav_keys(app: &mut App, code: KeyCode) {
     }
 }
 
-/// Load words from config dir or fallback to embedded
 fn load_words() -> io::Result<Vec<String>> {
     let mut path = dirs::data_dir().unwrap_or_else(|| PathBuf::from("."));
     path.push("term-typist/words/words.txt");
@@ -396,7 +412,6 @@ fn load_words() -> io::Result<Vec<String>> {
     Ok(embedded.lines().map(str::to_string).collect())
 }
 
-/// Generate a random sentence of `n` words
 fn generate_sentence(words: &[String], n: usize) -> String {
     let mut rng = rand::thread_rng();
     words.choose_multiple(&mut rng, n).cloned().collect::<Vec<_>>().join(" ")
