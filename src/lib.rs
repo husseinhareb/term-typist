@@ -48,7 +48,7 @@ struct App {
     incorrect_chars: usize,
     last_correct: Instant,
     locked: bool,
-    free_text: String,        // for Zen mode
+    free_text: String,
     selected_tab: usize,
     selected_value: usize,
     mode: Mode,
@@ -76,54 +76,43 @@ impl App {
     }
 
     fn on_key(&mut self, key: char) {
-        match self.selected_tab {
-            2 => {
-                // Zen: free typing
-                self.free_text.push(key);
+        if self.selected_tab == 2 {
+            // Zen mode: just append
+            self.free_text.push(key);
+            self.correct_chars += 1;
+            self.last_correct = Instant::now();
+            return;
+        }
+
+        // Spam-lock: if locked, ignore until correct key
+        if self.locked {
+            if let Some(i) = self.status.iter().position(|&s| s == Status::Untyped) {
+                let expected = self.target.chars().nth(i).unwrap();
+                if key != expected {
+                    return;
+                }
+                self.locked = false;
+            }
+        }
+
+        // Normal typing for Time/Words modes
+        if let Some(i) = self.status.iter().position(|&s| s == Status::Untyped) {
+            let expected = self.target.chars().nth(i).unwrap();
+            let is_correct = key == expected;
+            self.status[i] = if is_correct { Status::Correct } else { Status::Incorrect };
+            if is_correct {
                 self.correct_chars += 1;
                 self.last_correct = Instant::now();
+            } else {
+                self.incorrect_chars += 1;
             }
-            _ => {
-                // spam-lock
-                if self.locked {
-                    if let Some(i) = self
-                        .status
-                        .iter()
-                        .position(|&s| s == Status::Untyped)
-                    {
-                        let expected = self.target.chars().nth(i).unwrap();
-                        if key != expected {
-                            return; // still locked
-                        }
-                        self.locked = false; // unlock on correct
-                    }
-                }
+        }
 
-                // normal Time/Words typing
-                if let Some(i) = self
-                    .status
-                    .iter()
-                    .position(|&s| s == Status::Untyped)
-                {
-                    let expected = self.target.chars().nth(i).unwrap();
-                    let is_correct = key == expected;
-                    self.status[i] = if is_correct { Status::Correct } else { Status::Incorrect };
-                    if is_correct {
-                        self.correct_chars += 1;
-                        self.last_correct = Instant::now();
-                    } else {
-                        self.incorrect_chars += 1;
-                    }
-                }
-
-                // engage lock if >1s since last correct
-                if self.start.is_some()
-                    && Instant::now().duration_since(self.last_correct)
-                        >= Duration::from_secs(1)
-                {
-                    self.locked = true;
-                }
-            }
+        // Engage lock if more than 1s since last correct
+        if self.start.is_some()
+            && Instant::now().duration_since(self.last_correct) >= Duration::from_secs(1)
+        {
+            self.locked = true;
         }
     }
 
@@ -141,7 +130,7 @@ impl App {
 }
 
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
-    // Terminal setup
+    // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
@@ -152,6 +141,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut last_tick = Instant::now();
     let mut last_sample_sec = 0;
 
+    // Factory to recreate App
     let make_app = || {
         let words = load_words().expect("load_words failed");
         let sentence = generate_sentence(&words, 30);
@@ -160,22 +150,22 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut app = make_app();
 
     'mainloop: loop {
-        // Draw UI
+        // DRAW UI
         terminal.draw(|f| {
             let size = f.size();
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .margin(1)
                 .constraints([
-                    Constraint::Length(3),
-                    Constraint::Length(3),
-                    Constraint::Min(3),
-                    Constraint::Length(1),
+                    Constraint::Length(3), // navbar
+                    Constraint::Length(3), // speed/timer
+                    Constraint::Min(3),    // text
+                    Constraint::Length(1), // footer
                 ])
                 .split(size);
 
-            // Navbar: Mode tabs + values
-            let nav = Layout::default()
+            // Navbar (Mode tabs + options)
+            let nav_chunks = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([Constraint::Percentage(60), Constraint::Min(10)])
                 .split(chunks[0]);
@@ -187,36 +177,35 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 .block(Block::default().borders(Borders::ALL).title("Mode"))
                 .style(Style::default().fg(Color::White))
                 .highlight_style(
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD),
+                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
                 )
                 .divider(Span::raw(" "));
-            f.render_widget(tabs.select(app.selected_tab), nav[0]);
+            f.render_widget(tabs.select(app.selected_tab), nav_chunks[0]);
 
             let mut opts_spans = vec![Span::raw("| ")];
             for (i, &v) in app.current_options().iter().enumerate() {
-                let txt = v.to_string();
+                let s = v.to_string();
                 if i == app.selected_value {
                     opts_spans.push(Span::styled(
-                        txt,
+                        s,
                         Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
                     ));
                 } else {
-                    opts_spans.push(Span::raw(txt));
+                    opts_spans.push(Span::raw(s));
                 }
                 opts_spans.push(Span::raw(" "));
             }
-            let sel = Paragraph::new(Spans::from(opts_spans))
+            let opts_para = Paragraph::new(Spans::from(opts_spans))
                 .block(Block::default().borders(Borders::ALL).title("Value"));
-            f.render_widget(sel, nav[1]);
+            f.render_widget(opts_para, nav_chunks[1]);
 
-            // Speed panel: WPM/Acc | Timer/Count
-            let speed = Layout::default()
+            // Speed & Timer/Count panel
+            let speed_chunks = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
                 .split(chunks[1]);
 
+            // WPM/Acc
             let (net, acc) = if let Some(start) = app.start {
                 let secs = elapsed_seconds_since_start(start);
                 (
@@ -231,12 +220,12 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 format!("WPM: {:.1}  Acc: {:.0}%", net, acc)
             };
-            f.render_widget(
-                Paragraph::new(speed_text).block(Block::default().borders(Borders::ALL).title("Speed")),
-                speed[0],
-            );
+            let speed_para = Paragraph::new(speed_text)
+                .block(Block::default().borders(Borders::ALL).title("Speed"));
+            f.render_widget(speed_para, speed_chunks[0]);
 
-            let timer_txt = match app.mode {
+            // Timer / Word count / Zen label / Finished summary
+            let timer_text = match app.mode {
                 Mode::View => "Press Enter to start".into(),
                 Mode::Insert => match app.selected_tab {
                     0 => {
@@ -251,8 +240,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                             .position(|&s| s == Status::Untyped)
                             .unwrap_or(app.status.len());
                         let typed = app.target.chars().take(idx).collect::<String>();
-                        let cnt = typed.split_whitespace().count();
-                        format!("Words: {}/{}", cnt, app.current_options()[app.selected_value])
+                        let count = typed.split_whitespace().count();
+                        format!("Words: {}/{}", count, app.current_options()[app.selected_value])
                     }
                     2 => "Zen mode".into(),
                     _ => String::new(),
@@ -261,19 +250,14 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     format!("🏁 Done! {}s • {:.1} WPM  Esc=Restart", app.elapsed_secs(), net)
                 }
             };
-            f.render_widget(
-                Paragraph::new(timer_txt).block(Block::default().borders(Borders::ALL).title("Timer")),
-                speed[1],
-            );
+            let timer_para = Paragraph::new(timer_text)
+                .block(Block::default().borders(Borders::ALL).title("Timer"));
+            f.render_widget(timer_para, speed_chunks[1]);
 
-            // Text pane
+            // Text / Free-text pane
             if app.selected_tab == 2 {
-                // Zen: show free_text
-                let spans: Vec<Span> = app
-                    .free_text
-                    .chars()
-                    .map(|ch| Span::raw(ch.to_string()))
-                    .collect();
+                // Zen free typing
+                let spans = app.free_text.chars().map(|ch| Span::raw(ch.to_string())).collect::<Vec<_>>();
                 f.render_widget(
                     Paragraph::new(Spans::from(spans))
                         .block(Block::default().borders(Borders::ALL).title("Zen"))
@@ -281,13 +265,13 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     chunks[2],
                 );
             } else {
-                // Time/Words: target w/ color
+                // Time/Words: target with coloring & cursor marker
                 let current = app
                     .status
                     .iter()
                     .position(|&s| s == Status::Untyped)
                     .unwrap_or(app.status.len());
-                let spans: Vec<Span> = app
+                let spans = app
                     .target
                     .chars()
                     .zip(app.status.iter().cloned())
@@ -301,13 +285,15 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                         if i == current && app.mode == Mode::Insert {
                             Span::styled(
                                 ch.to_string(),
-                                base.bg(Color::Yellow).fg(Color::Black).add_modifier(Modifier::BOLD),
+                                base.bg(Color::Yellow)
+                                    .fg(Color::Black)
+                                    .add_modifier(Modifier::BOLD),
                             )
                         } else {
                             Span::styled(ch.to_string(), base)
                         }
                     })
-                    .collect();
+                    .collect::<Vec<_>>();
                 f.render_widget(
                     Paragraph::new(Spans::from(spans))
                         .block(Block::default().borders(Borders::ALL).title("Text"))
@@ -316,33 +302,41 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 );
             }
 
-            // Footer / locked notice
-            let footer = if app.locked {
+            // Footer: locked message or elapsed time
+            let footer_para = if app.locked {
                 Paragraph::new("Too many mistakes! Type the correct letter to resume.")
                     .style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
+                    .block(Block::default().borders(Borders::ALL).title("Status"))
             } else if app.mode == Mode::Insert {
                 Paragraph::new(format!("Elapsed: {}s", app.elapsed_secs()))
+                    .block(Block::default().borders(Borders::ALL).title("Status"))
             } else {
-                Paragraph::new("")
+                Paragraph::new("").block(Block::default().borders(Borders::ALL).title("Status"))
             };
-            f.render_widget(
-                footer.block(Block::default().borders(Borders::ALL).title("Status")),
-                chunks[3],
-            );
+            f.render_widget(footer_para, chunks[3]);
         })?;
 
-        // Input & state transitions
+        // INPUT & LOGIC
         let timeout = tick_rate.checked_sub(last_tick.elapsed()).unwrap_or_default();
         if event::poll(timeout)? {
             if let Event::Key(KeyEvent { code, modifiers, .. }) = event::read()? {
-                // Ctrl+C = immediate exit
+                // Ctrl+C → quit
                 if code == KeyCode::Char('c') && modifiers.contains(KeyModifiers::CONTROL) {
                     break 'mainloop;
                 }
-                // Esc = full restart
+                // Plain Esc → full restart
                 if code == KeyCode::Esc && modifiers.is_empty() {
                     app = make_app();
                     last_sample_sec = 0;
+                    continue 'mainloop;
+                }
+                // Shift+Esc in Zen+Insert → finish test (show graph)
+                if code == KeyCode::Esc
+                    && modifiers.contains(KeyModifiers::SHIFT)
+                    && app.selected_tab == 2
+                    && app.mode == Mode::Insert
+                {
+                    app.mode = Mode::Finished;
                     continue 'mainloop;
                 }
 
@@ -355,6 +349,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                             app.locked = false;
                             app.mode = Mode::Insert;
                             if app.selected_tab == 2 {
+                                // clear Zen buffer
                                 app.free_text.clear();
                                 app.correct_chars = 0;
                                 app.incorrect_chars = 0;
@@ -366,11 +361,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     Mode::Insert => {
                         if let KeyCode::Char(c) = code {
                             app.on_key(c);
-
                             // auto-finish Time
                             if app.selected_tab == 0
-                                && app.elapsed_secs()
-                                    >= app.current_options()[app.selected_value] as u64
+                                && app.elapsed_secs() >= app.current_options()[app.selected_value] as u64
                             {
                                 app.mode = Mode::Finished;
                             }
@@ -391,7 +384,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                             handle_nav_keys(&mut app, code);
                         }
                     }
-                    Mode::Finished => handle_nav_keys(&mut app, code),
+                    Mode::Finished => {
+                        handle_nav_keys(&mut app, code);
+                    }
                 }
             }
         }
@@ -407,7 +402,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
-        // On finish → graph + wait for Esc/Ctrl+C
+        // On finish → draw graph, wait for Esc/Ctrl+C
         if app.mode == Mode::Finished {
             terminal.clear()?;
             terminal.draw(|f| graph::draw_wpm_chart(f, f.size(), &app.samples))?;
@@ -430,7 +425,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // Cleanup & final summary
+    // CLEANUP
     disable_raw_mode()?;
     execute!(io::stdout(), LeaveAlternateScreen)?;
     if let Some(start) = app.start {
@@ -466,18 +461,15 @@ fn handle_nav_keys(app: &mut App, code: KeyCode) {
 
 /// Load words from config dir or fallback to embedded
 fn load_words() -> io::Result<Vec<String>> {
-    // Determine the path: ~/.config/term-typist/words/words.txt (or similar)
     let mut path = dirs::data_dir().unwrap_or_else(|| PathBuf::from("."));
     path.push("term-typist/words/words.txt");
 
     if path.exists() {
-        // Read lines, collecting into Result<Vec<String>, Error>
         let file = File::open(path)?;
         let reader = BufReader::new(file);
         return reader.lines().collect();
     }
 
-    // Fallback: embedded word list
     Ok(include_str!("../words/words.txt")
         .lines()
         .map(str::to_string)
