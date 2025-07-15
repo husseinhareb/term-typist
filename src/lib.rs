@@ -102,10 +102,7 @@ impl App {
         }
 
         // Engage lock if more than 1s since last correct
-        if
-            self.start.is_some() &&
-            Instant::now().duration_since(self.last_correct) >= Duration::from_secs(1)
-        {
+        if self.start.is_some() && Instant::now().duration_since(self.last_correct) >= Duration::from_secs(1) {
             self.locked = true;
         }
     }
@@ -153,8 +150,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 .constraints([
                     Constraint::Length(3), // navbar
                     Constraint::Length(3), // speed/timer
-                    Constraint::Min(3), // text
-                    Constraint::Length(1), // footer
+                    Constraint::Min(3),    // text
                 ])
                 .split(size);
 
@@ -301,23 +297,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     chunks[2]
                 );
             }
-
-            // Footer: locked message or elapsed time
-            let footer_para = if app.locked {
-                Paragraph::new("Too many mistakes! Type the correct letter to resume.")
-                    .style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
-                    .block(Block::default().borders(Borders::ALL).title("Status"))
-            } else if app.mode == Mode::Insert {
-                Paragraph::new(format!("Elapsed: {}s", app.elapsed_secs())).block(
-                    Block::default().borders(Borders::ALL).title("Status")
-                )
-            } else {
-                Paragraph::new("").block(Block::default().borders(Borders::ALL).title("Status"))
-            };
-            f.render_widget(footer_para, chunks[3]);
         })?;
 
-        // INPUT & LOGIC
+        // INPUT & LOGIC (unchanged)
         let timeout = tick_rate.checked_sub(last_tick.elapsed()).unwrap_or_default();
         if event::poll(timeout)? {
             if let Event::Key(KeyEvent { code, modifiers, .. }) = event::read()? {
@@ -341,7 +323,6 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                             app.locked = false;
                             app.mode = Mode::Insert;
                             if app.selected_tab == 2 {
-                                // clear Zen buffer
                                 app.free_text.clear();
                                 app.correct_chars = 0;
                                 app.incorrect_chars = 0;
@@ -351,40 +332,18 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     }
                     Mode::Insert => {
-                        // First, catch Shift+Esc in Zen mode and finish:
-                        if code == KeyCode::Esc
-                            && modifiers == KeyModifiers::SHIFT
-                            && app.selected_tab == 2
-                        {
-                            // ensure start time for graphing
-                            if app.start.is_none() {
-                                let now = Instant::now();
-                                app.start = Some(now);
-                                app.last_correct = now;
-                            }
-                            app.mode = Mode::Finished;
-                            continue 'mainloop;
-                        }
-
-                        // Normal typing and navigation
                         if let KeyCode::Char(c) = code {
                             app.on_key(c);
                             // auto-finish Time
-                            if
-                                app.selected_tab == 0 &&
-                                app.elapsed_secs() >= (app.current_options()[app.selected_value] as u64)
-                            {
+                            if app.selected_tab == 0 && app.elapsed_secs() >= app.current_options()[app.selected_value] as u64 {
                                 app.mode = Mode::Finished;
                             }
                             // auto-finish Words
                             if app.selected_tab == 1 {
-                                let idx = app.status
-                                    .iter()
-                                    .position(|&s| s == Status::Untyped)
-                                    .unwrap_or(app.status.len());
+                                let idx = app.status.iter().position(|&s| s == Status::Untyped).unwrap_or(app.status.len());
                                 let typed = app.target.chars().take(idx).collect::<String>();
                                 let cnt = typed.split_whitespace().count();
-                                if cnt >= (app.current_options()[app.selected_value] as usize) {
+                                if cnt >= app.current_options()[app.selected_value] as usize {
                                     app.mode = Mode::Finished;
                                 }
                             }
@@ -399,7 +358,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
-        // WPM sampling each second
+        // WPM sampling & finish graph (unchanged)
         if app.mode == Mode::Insert {
             let sec = app.elapsed_secs();
             if sec > last_sample_sec {
@@ -410,7 +369,6 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
-        // On finish → draw graph, wait for Esc/Ctrl+C
         if app.mode == Mode::Finished {
             terminal.clear()?;
             terminal.draw(|f| graph::draw_wpm_chart(f, f.size(), &app.samples))?;
@@ -449,29 +407,15 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
 fn handle_nav_keys(app: &mut App, code: KeyCode) {
     match code {
-        KeyCode::Char('1') => {
-            app.selected_tab = 0;
-        }
-        KeyCode::Char('2') => {
-            app.selected_tab = 1;
-        }
-        KeyCode::Char('3') => {
-            app.selected_tab = 2;
-        }
-        KeyCode::Left if app.selected_value > 0 => {
-            app.selected_value -= 1;
-        }
-        KeyCode::Right => {
-            let len = app.current_options().len();
-            if app.selected_value + 1 < len {
-                app.selected_value += 1;
-            }
-        }
+        KeyCode::Char('1') => app.selected_tab = 0,
+        KeyCode::Char('2') => app.selected_tab = 1,
+        KeyCode::Char('3') => app.selected_tab = 2,
+        KeyCode::Left if app.selected_value > 0 => app.selected_value -= 1,
+        KeyCode::Right if app.selected_value + 1 < app.current_options().len() => app.selected_value += 1,
         _ => {}
     }
 }
 
-/// Load words from config dir or fallback to embedded
 fn load_words() -> io::Result<Vec<String>> {
     let mut path = dirs::data_dir().unwrap_or_else(|| PathBuf::from("."));
     path.push("term-typist/words/words.txt");
@@ -485,7 +429,6 @@ fn load_words() -> io::Result<Vec<String>> {
     Ok(include_str!("../words/words.txt").lines().map(str::to_string).collect())
 }
 
-/// Generate a random sentence of `n` words
 fn generate_sentence(words: &[String], n: usize) -> String {
     let mut rng = rand::thread_rng();
     words.choose_multiple(&mut rng, n).cloned().collect::<Vec<_>>().join(" ")
