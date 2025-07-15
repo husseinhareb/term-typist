@@ -13,7 +13,7 @@ use crossterm::{
 };
 use tui::{
     backend::{Backend, CrosstermBackend},
-    layout::{Constraint, Direction, Layout},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Span, Spans},
     widgets::{Block, Borders, Paragraph, Tabs, Wrap},
@@ -25,16 +25,24 @@ mod wpm;
 use wpm::{accuracy, elapsed_seconds_since_start, net_wpm};
 
 #[derive(PartialEq, Clone, Copy)]
-enum Status { Untyped, Correct, Incorrect }
+enum Status {
+    Untyped,
+    Correct,
+    Incorrect,
+}
 
 #[derive(PartialEq, Clone, Copy)]
-enum Mode { View, Insert, Finished }
+enum Mode {
+    View,
+    Insert,
+    Finished,
+}
 
 struct App {
     target: String,
     status: Vec<Status>,
     start: Option<Instant>,
-    last_input: Instant,        // <— new: when was the last key (char or backspace)
+    last_input: Instant,
     correct_chars: usize,
     incorrect_chars: usize,
     last_correct: Instant,
@@ -67,25 +75,26 @@ impl App {
     }
 
     fn on_key(&mut self, key: char) {
-        self.last_input = Instant::now();          // record activity
+        self.last_input = Instant::now();
         if self.selected_tab == 2 {
-            // Zen
             self.free_text.push(key);
             self.correct_chars += 1;
             self.last_correct = Instant::now();
             return;
         }
         if self.locked {
-            if let Some(i) = self.status.iter().position(|&s| s==Status::Untyped) {
+            if let Some(i) = self.status.iter().position(|&s| s == Status::Untyped) {
                 let expected = self.target.chars().nth(i).unwrap();
-                if key != expected { return; }
+                if key != expected {
+                    return;
+                }
                 self.locked = false;
             }
         }
-        if let Some(i) = self.status.iter().position(|&s| s==Status::Untyped) {
+        if let Some(i) = self.status.iter().position(|&s| s == Status::Untyped) {
             let expected = self.target.chars().nth(i).unwrap();
-            let is_correct = key == expected;
-            self.status[i] = if is_correct {
+            let correct = key == expected;
+            self.status[i] = if correct {
                 self.correct_chars += 1;
                 self.last_correct = Instant::now();
                 Status::Correct
@@ -102,17 +111,25 @@ impl App {
     }
 
     fn backspace(&mut self) {
-        self.last_input = Instant::now();          // record activity
+        self.last_input = Instant::now();
         if self.selected_tab == 2 {
             if self.free_text.pop().is_some() && self.correct_chars > 0 {
                 self.correct_chars -= 1;
             }
             return;
         }
-        if let Some(i) = self.status.iter().rposition(|&s| s!=Status::Untyped) {
+        if let Some(i) = self.status.iter().rposition(|&s| s != Status::Untyped) {
             match self.status[i] {
-                Status::Correct   => { if self.correct_chars  > 0 { self.correct_chars  -= 1; } }
-                Status::Incorrect => { if self.incorrect_chars> 0 { self.incorrect_chars-= 1; } }
+                Status::Correct => {
+                    if self.correct_chars > 0 {
+                        self.correct_chars -= 1;
+                    }
+                }
+                Status::Incorrect => {
+                    if self.incorrect_chars > 0 {
+                        self.incorrect_chars -= 1;
+                    }
+                }
                 _ => {}
             }
             self.status[i] = Status::Untyped;
@@ -123,12 +140,80 @@ impl App {
     fn elapsed_secs(&self) -> u64 {
         self.start.map(|s| s.elapsed().as_secs()).unwrap_or(0)
     }
+
     fn current_options(&self) -> &'static [u16] {
         match self.selected_tab {
             0 => &[15, 30, 60, 100],
             1 => &[10, 25, 50, 100],
             _ => &[],
         }
+    }
+}
+
+/// On-screen keyboard widget.
+struct Keyboard {
+    pressed_key: Option<String>,
+}
+
+impl Keyboard {
+    fn new() -> Self {
+        Keyboard { pressed_key: None }
+    }
+
+    fn handle_key(&mut self, code: &KeyCode) {
+        self.pressed_key = map_keycode(code);
+    }
+
+    fn draw<B: Backend>(&self, f: &mut Frame<B>, area: Rect) {
+        let rows = vec![
+            vec!["ESC","1","2","3","4","5","6","7","8","9","0","-","=","BS"],
+            vec!["Q","W","E","R","T","Y","U","I","O","P","[","]","\\"],
+            vec!["A","S","D","F","G","H","J","K","L",";","'"],
+            vec!["Z","X","C","V","B","N","M",",",".","/"],
+            vec!["SPC"],
+        ];
+
+        let row_areas = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints(rows.iter().map(|_| Constraint::Length(3)).collect::<Vec<_>>())
+            .split(area);
+
+        for (r, keys) in rows.iter().enumerate() {
+            let row_area = row_areas[r];
+            let constraints = if keys.len() == 1 && keys[0] == "SPC" {
+                vec![Constraint::Percentage(100)]
+            } else {
+                keys.iter().map(|_| Constraint::Length(5)).collect()
+            };
+            let key_areas = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints(constraints)
+                .split(row_area);
+
+            for (i, &label) in keys.iter().enumerate() {
+                let is_pressed = self.pressed_key.as_deref() == Some(label);
+                let (fg, bg) = if is_pressed {
+                    (Color::Black, Color::Yellow)
+                } else {
+                    (Color::White, Color::Reset)
+                };
+                let width = key_areas[i].width as usize;
+                let text = format!("{:^1$}", label, width);
+                let paragraph = Paragraph::new(Span::styled(text, Style::default().fg(fg).bg(bg)))
+                    .block(Block::default().borders(Borders::ALL));
+                f.render_widget(paragraph, key_areas[i]);
+            }
+        }
+    }
+}
+
+fn map_keycode(code: &KeyCode) -> Option<String> {
+    match code {
+        KeyCode::Esc => Some("ESC".into()),
+        KeyCode::Backspace => Some("BS".into()),
+        KeyCode::Char(' ') => Some("SPC".into()),
+        KeyCode::Char(c) => Some(c.to_ascii_uppercase().to_string()),
+        _ => None,
     }
 }
 
@@ -149,47 +234,42 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         App::new(sentence)
     };
     let mut app = make_app();
+    let mut keyboard = Keyboard::new();
 
     'main: loop {
         terminal.draw(|f| {
-            // ——— UI Layout ———
             let size = f.size();
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .margin(1)
-                .constraints([Constraint::Length(3),
-                              Constraint::Length(3),
-                              Constraint::Min(3)])
+                .constraints([Constraint::Length(3), Constraint::Length(3), Constraint::Min(3)])
                 .split(size);
 
             // Navbar
             let nav = Layout::default()
                 .direction(Direction::Horizontal)
-                .constraints([Constraint::Percentage(60),
-                              Constraint::Min(10)])
+                .constraints([Constraint::Percentage(60), Constraint::Min(10)])
                 .split(chunks[0]);
-            let titles = ["Time","Words","Zen"]
-                .iter().map(|t| Spans::from(*t)).collect::<Vec<_>>();
+            let titles = ["Time", "Words", "Zen"]
+                .iter()
+                .map(|t| Spans::from(*t))
+                .collect::<Vec<_>>();
             let tabs = Tabs::new(titles)
                 .block(Block::default().borders(Borders::ALL).title("Mode"))
                 .style(Style::default().fg(Color::White))
-                .highlight_style(Style::default()
-                    .fg(Color::Yellow).add_modifier(Modifier::BOLD))
+                .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
                 .divider(Span::raw(" "));
             f.render_widget(tabs.select(app.selected_tab), nav[0]);
 
             // Value selector
             let mut spans = vec![Span::raw("| ")];
-            for (i,&v) in app.current_options().iter().enumerate() {
+            for (i, &v) in app.current_options().iter().enumerate() {
                 let s = v.to_string();
-                spans.push(
-                    if i==app.selected_value {
-                        Span::styled(s,
-                            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
-                    } else {
-                        Span::raw(s)
-                    }
-                );
+                spans.push(if i == app.selected_value {
+                    Span::styled(s, Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+                } else {
+                    Span::raw(s)
+                });
                 spans.push(Span::raw(" "));
             }
             let opts = Paragraph::new(Spans::from(spans))
@@ -199,22 +279,20 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             // Speed & Timer
             let st = Layout::default()
                 .direction(Direction::Horizontal)
-                .constraints([Constraint::Percentage(50),
-                              Constraint::Percentage(50)])
+                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
                 .split(chunks[1]);
 
-            // compute “effective elapsed” = real elapsed + idle since last_input
             let real_elapsed_f = app.start.map(|s| elapsed_seconds_since_start(s)).unwrap_or(0.0);
             let idle_f = Instant::now().duration_since(app.last_input).as_secs_f64();
             let effective_elapsed = real_elapsed_f + idle_f;
 
             let (net, acc) = if app.start.is_some() {
-                ( net_wpm(app.correct_chars, app.incorrect_chars, effective_elapsed),
-                  accuracy(app.correct_chars, app.incorrect_chars) )
+                (net_wpm(app.correct_chars, app.incorrect_chars, effective_elapsed),
+                 accuracy(app.correct_chars, app.incorrect_chars))
             } else {
                 (0.0, 0.0)
             };
-            let speed_txt = if app.mode==Mode::View {
+            let speed_txt = if app.mode == Mode::View {
                 "WPM: --  Acc: --%".into()
             } else {
                 format!("WPM: {:.1}  Acc: {:.0}%", net, acc)
@@ -223,55 +301,48 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 .block(Block::default().borders(Borders::ALL).title("Speed"));
             f.render_widget(speed, st[0]);
 
-            // Timer
             let timer_txt = match app.mode {
                 Mode::View => "Press Enter to start".into(),
-                Mode::Insert => {
-                    match app.selected_tab {
-                        0 => {
-                            let rem = (app.current_options()[app.selected_value] as i64
-                                - app.elapsed_secs() as i64).max(0);
-                            format!("Time left: {}s", rem)
-                        }
-                        1 => {
-                            let idx = app.status.iter()
-                                .position(|&s| s==Status::Untyped)
-                                .unwrap_or(app.status.len());
-                            let typed = app.target.chars().take(idx).collect::<String>();
-                            format!("Words: {}/{}",
-                                typed.split_whitespace().count(),
-                                app.current_options()[app.selected_value])
-                        }
-                        _ => "Zen mode".into(),
+                Mode::Insert => match app.selected_tab {
+                    0 => {
+                        let rem = (app.current_options()[app.selected_value] as i64 - app.elapsed_secs() as i64).max(0);
+                        format!("Time left: {}s", rem)
                     }
-                }
-                Mode::Finished => {
-                    format!("🏁 Done! {}s • {:.1} WPM  Esc=Restart",
-                        app.elapsed_secs(),
-                        net_wpm(app.correct_chars, app.incorrect_chars, real_elapsed_f))
-                }
+                    1 => {
+                        let idx = app.status.iter().position(|&s| s == Status::Untyped).unwrap_or(app.status.len());
+                        let typed = app.target.chars().take(idx).collect::<String>();
+                        format!("Words: {}/{}", typed.split_whitespace().count(), app.current_options()[app.selected_value])
+                    }
+                    _ => "Zen mode".into(),
+                },
+                Mode::Finished => format!(
+                    "🏁 Done! {}s • {:.1} WPM  Esc=Restart",
+                    app.elapsed_secs(),
+                    net_wpm(app.correct_chars, app.incorrect_chars, real_elapsed_f)
+                ),
             };
             let timer = Paragraph::new(timer_txt)
                 .block(Block::default().borders(Borders::ALL).title("Timer"));
             f.render_widget(timer, st[1]);
 
-            // Text / Zen pane
-            if app.selected_tab==2 {
-                let free = app.free_text.chars()
-                    .map(|c| Span::raw(c.to_string()))
-                    .collect::<Vec<_>>();
+            // Bottom: split text/zen (50%) and keyboard (50%)
+            let bottom = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+                .split(chunks[2]);
+
+            // Left pane: text or zen
+            if app.selected_tab == 2 {
+                let free = app.free_text.chars().map(|c| Span::raw(c.to_string())).collect::<Vec<_>>();
                 f.render_widget(
                     Paragraph::new(Spans::from(free))
                         .block(Block::default().borders(Borders::ALL).title("Zen"))
-                        .wrap(Wrap{trim:true}),
-                    chunks[2],
+                        .wrap(Wrap { trim: true }),
+                    bottom[0],
                 );
             } else {
-                let cur = app.status.iter()
-                    .position(|&s| s==Status::Untyped)
-                    .unwrap_or(app.status.len());
-                let spans = app.target.chars()
-                    .zip(app.status.iter().cloned())
+                let cur = app.status.iter().position(|&s| s == Status::Untyped).unwrap_or(app.status.len());
+                let spans = app.target.chars().zip(app.status.iter().cloned())
                     .enumerate()
                     .map(|(i,(ch,st))| {
                         let base = match st {
@@ -279,10 +350,11 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                             Status::Correct  => Style::default().fg(Color::Green),
                             Status::Incorrect=> Style::default().fg(Color::Red),
                         };
-                        if i==cur && app.mode==Mode::Insert {
-                            Span::styled(ch.to_string(),
-                                base.bg(Color::Yellow).fg(Color::Black)
-                                    .add_modifier(Modifier::BOLD))
+                        if i == cur && app.mode == Mode::Insert {
+                            Span::styled(
+                                ch.to_string(),
+                                base.bg(Color::Yellow).fg(Color::Black).add_modifier(Modifier::BOLD),
+                            )
                         } else {
                             Span::styled(ch.to_string(), base)
                         }
@@ -291,21 +363,27 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 f.render_widget(
                     Paragraph::new(Spans::from(spans))
                         .block(Block::default().borders(Borders::ALL).title("Text"))
-                        .wrap(Wrap{trim:true}),
-                    chunks[2],
+                        .wrap(Wrap { trim: true }),
+                    bottom[0],
                 );
             }
+
+            // Right pane: keyboard
+            keyboard.draw(f, bottom[1]);
         })?;
 
-        // ——— input & state machine ———
+        // Input & state
         let timeout = tick_rate.checked_sub(last_tick.elapsed()).unwrap_or_default();
         if event::poll(timeout)? {
-            if let Event::Key(KeyEvent{code,modifiers,..}) = event::read()? {
-                // Quit or restart
-                if code==KeyCode::Char('c') && modifiers.contains(KeyModifiers::CONTROL) {
+            if let Event::Key(KeyEvent { code, modifiers, .. }) = event::read()? {
+                // update keyboard highlight
+                keyboard.handle_key(&code);
+
+                // quit / restart
+                if code == KeyCode::Char('c') && modifiers.contains(KeyModifiers::CONTROL) {
                     break 'main;
                 }
-                if code==KeyCode::Esc && modifiers.is_empty() {
+                if code == KeyCode::Esc && modifiers.is_empty() {
                     app = make_app();
                     last_sample = 0;
                     continue 'main;
@@ -313,17 +391,17 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
                 match app.mode {
                     Mode::View => {
-                        if code==KeyCode::Enter {
+                        if code == KeyCode::Enter {
                             let now = Instant::now();
                             app.start = Some(now);
                             app.last_correct = now;
                             app.last_input = now;
                             app.locked = false;
                             app.mode = Mode::Insert;
-                            if app.selected_tab==2 {
+                            if app.selected_tab == 2 {
                                 app.free_text.clear();
-                                app.correct_chars=0;
-                                app.incorrect_chars=0;
+                                app.correct_chars = 0;
+                                app.incorrect_chars = 0;
                             }
                         } else {
                             handle_nav(&mut app, code);
@@ -333,19 +411,16 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                         KeyCode::Char(c) => {
                             app.on_key(c);
                             // auto-finish
-                            if app.selected_tab==0 &&
-                               app.elapsed_secs() >= app.current_options()[app.selected_value] as u64 {
+                            if app.selected_tab == 0
+                                && app.elapsed_secs() >= app.current_options()[app.selected_value] as u64
+                            {
                                 app.mode = Mode::Finished;
                             }
-                            if app.selected_tab==1 {
-                                let idx = app.status.iter()
-                                    .position(|&s| s==Status::Untyped)
-                                    .unwrap_or(app.status.len());
-                                let cnt = app.target.chars()
-                                    .take(idx).collect::<String>()
-                                    .split_whitespace().count();
+                            if app.selected_tab == 1 {
+                                let idx = app.status.iter().position(|&s| s == Status::Untyped).unwrap_or(app.status.len());
+                                let cnt = app.target.chars().take(idx).collect::<String>().split_whitespace().count();
                                 if cnt >= app.current_options()[app.selected_value] as usize {
-                                    app.mode=Mode::Finished;
+                                    app.mode = Mode::Finished;
                                 }
                             }
                         }
@@ -355,15 +430,15 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                         other => handle_nav(&mut app, other),
                     },
                     Mode::Finished => {
-                        terminal.draw(|f| draw_finished(f,&app)).unwrap();
+                        terminal.draw(|f| draw_finished(f, &app)).unwrap();
                         loop {
-                            if let Event::Key(KeyEvent{code,modifiers,..}) = event::read()? {
-                                if code==KeyCode::Esc && modifiers.is_empty() {
+                            if let Event::Key(KeyEvent { code, modifiers, .. }) = event::read()? {
+                                if code == KeyCode::Esc && modifiers.is_empty() {
                                     app = make_app();
-                                    last_sample=0;
+                                    last_sample = 0;
                                     break;
                                 }
-                                if code==KeyCode::Char('c') && modifiers.contains(KeyModifiers::CONTROL) {
+                                if code == KeyCode::Char('c') && modifiers.contains(KeyModifiers::CONTROL) {
                                     disable_raw_mode()?;
                                     execute!(io::stdout(), LeaveAlternateScreen)?;
                                     return Ok(());
@@ -375,12 +450,11 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
-        // ——— WPM sampling each second ———
-        if app.mode==Mode::Insert {
+        // WPM sampling
+        if app.mode == Mode::Insert {
             let secs = app.elapsed_secs();
-            if secs>last_sample {
-                last_sample=secs;
-                // recompute effective_elapsed just as above
+            if secs > last_sample {
+                last_sample = secs;
                 let real_elapsed_f = elapsed_seconds_since_start(app.start.unwrap());
                 let idle_f = Instant::now().duration_since(app.last_input).as_secs_f64();
                 let eff = real_elapsed_f + idle_f;
