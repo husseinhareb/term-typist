@@ -150,62 +150,98 @@ impl App {
     }
 }
 
-/// On-screen keyboard widget.
+/// On-screen keyboard widget, with realistic key sizes.
 struct Keyboard {
     pressed_key: Option<String>,
 }
 
 impl Keyboard {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Keyboard { pressed_key: None }
     }
 
-    fn handle_key(&mut self, code: &KeyCode) {
+    pub fn handle_key(&mut self, code: &KeyCode) {
         self.pressed_key = map_keycode(code);
     }
 
-    fn draw<B: Backend>(&self, f: &mut Frame<B>, area: Rect) {
-        let rows = vec![
-            vec!["ESC","1","2","3","4","5","6","7","8","9","0","-","=","BS"],
-            vec!["Q","W","E","R","T","Y","U","I","O","P","[","]","\\"],
-            vec!["A","S","D","F","G","H","J","K","L",";","'"],
-            vec!["Z","X","C","V","B","N","M",",",".","/"],
-            vec!["SPC"],
+    pub fn draw<B: Backend>(&self, f: &mut Frame<B>, area: Rect) {
+        // Each row is a list of (label, width-units)
+        let rows: Vec<Vec<(&str, u16)>> = vec![
+            vec![
+                ("ESC", 2), ("1", 1), ("2", 1), ("3", 1), ("4", 1),
+                ("5", 1), ("6", 1), ("7", 1), ("8", 1), ("9", 1),
+                ("0", 1), ("-", 1), ("=", 1), ("BS", 3),
+            ],
+            vec![
+                ("TAB", 3), ("Q", 1), ("W", 1), ("E", 1), ("R", 1),
+                ("T", 1), ("Y", 1), ("U", 1), ("I", 1), ("O", 1),
+                ("P", 1), ("[", 1), ("]", 1), ("\\", 2),
+            ],
+            vec![
+                ("CAPS", 3), ("A", 1), ("S", 1), ("D", 1), ("F", 1),
+                ("G", 1), ("H", 1), ("J", 1), ("K", 1), ("L", 1),
+                (";", 1), ("'", 1), ("ENTER", 3),
+            ],
+            vec![
+                ("SHIFT", 4), ("Z", 1), ("X", 1), ("C", 1), ("V", 1),
+                ("B", 1), ("N", 1), ("M", 1), (",", 1), (".", 1),
+                ("/", 1), ("SHIFT", 4),
+            ],
+            vec![("SPC", 12)],
         ];
 
+        // Divide the full area vertically into one stripe per row
         let row_areas = Layout::default()
             .direction(Direction::Vertical)
-            .constraints(rows.iter().map(|_| Constraint::Length(3)).collect::<Vec<_>>())
+            .constraints(
+                rows.iter().map(|_| Constraint::Length(3)).collect::<Vec<_>>()
+            )
             .split(area);
 
-        for (r, keys) in rows.iter().enumerate() {
-            let row_area = row_areas[r];
-            let constraints = if keys.len() == 1 && keys[0] == "SPC" {
-                vec![Constraint::Percentage(100)]
-            } else {
-                keys.iter().map(|_| Constraint::Length(5)).collect()
-            };
+        for (row_idx, row) in rows.iter().enumerate() {
+            let row_area = row_areas[row_idx];
+
+            // Sum up the weight units in this row
+            let total_units: u16 = row.iter().map(|&(_, u)| u).sum();
+            let mut remaining = row_area.width;
+
+            // Compute each key's actual width
+            let widths: Vec<u16> = row.iter().enumerate().map(|(i, &(_lbl, units))| {
+                let w = if i + 1 < row.len() {
+                    ((row_area.width as u32 * units as u32) / total_units as u32) as u16
+                } else {
+                    // last key takes all leftover
+                    remaining
+                };
+                remaining = remaining.saturating_sub(w);
+                w
+            }).collect();
+
+            // Now split the row_area horizontally into these widths
+            let constraints = widths.iter().map(|&w| Constraint::Length(w)).collect::<Vec<_>>();
             let key_areas = Layout::default()
                 .direction(Direction::Horizontal)
                 .constraints(constraints)
                 .split(row_area);
 
-            for (i, &label) in keys.iter().enumerate() {
+            // Render each key, centering its label
+            for (i, (key, &w)) in row.iter().zip(widths.iter()).enumerate() {
+                let (label, _) = *key;
+                let area = key_areas[i];
                 let is_pressed = self.pressed_key.as_deref() == Some(label);
-                let (fg, bg) = if is_pressed {
-                    (Color::Black, Color::Yellow)
-                } else {
-                    (Color::White, Color::Reset)
-                };
-                let width = key_areas[i].width as usize;
-                let text = format!("{:^1$}", label, width);
-                let paragraph = Paragraph::new(Span::styled(text, Style::default().fg(fg).bg(bg)))
+                let fg = if is_pressed { Color::Black } else { Color::White };
+                let bg = if is_pressed { Color::Yellow } else { Color::Reset };
+
+                let text = format!("{:^1$}", label, w as usize);
+                let widget = Paragraph::new(Span::styled(text, Style::default().fg(fg).bg(bg)))
                     .block(Block::default().borders(Borders::ALL));
-                f.render_widget(paragraph, key_areas[i]);
+
+                f.render_widget(widget, area);
             }
         }
     }
 }
+
 
 fn map_keycode(code: &KeyCode) -> Option<String> {
     match code {
