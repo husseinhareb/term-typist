@@ -34,7 +34,6 @@ pub fn draw<B: Backend>(
 
     let rows = Layout::default()
         .direction(Direction::Vertical)
-        .margin(1)
         .constraints(v_cons)
         .split(size);
 
@@ -162,7 +161,11 @@ pub fn draw<B: Backend>(
                 "WPM: --  Acc: --%".into()
             };
             let speed = Paragraph::new(speed_txt)
-                .block(Block::default().borders(Borders::ALL).title("4 Speed"));
+                .block(Block::default().borders(Borders::ALL).title(Spans::from(vec![
+                    Span::styled("⁴", Style::default().fg(Color::LightBlue)),
+                    Span::raw(" Speed"),
+                ])),
+                );
             f.render_widget(speed, cols[col_idx]);
             col_idx += 1;
         }
@@ -207,8 +210,8 @@ pub fn draw<B: Backend>(
             };
             let timer = Paragraph::new(timer_txt)
                 .block(Block::default().borders(Borders::ALL).title(Spans::from(vec![
-                    Span::styled("⁴", Style::default().fg(Color::LightBlue)),
-                    Span::raw(" Speed"),
+                    Span::styled("⁵", Style::default().fg(Color::LightBlue)),
+                    Span::raw(" Timer"),
                 ])),
                 );
             f.render_widget(timer, cols[col_idx]);
@@ -217,13 +220,17 @@ pub fn draw<B: Backend>(
 
     // ── Row 3: bottom area ────────────────────────────────
     let bottom_area = rows[row_idx];
-    let b_cons = if app.show_text && app.show_keyboard {
-        vec![Constraint::Percentage(50), Constraint::Percentage(50)]
+        let b_cons = if app.show_text && app.show_keyboard {
+        // 30% text on top, 70% keyboard below
+        vec![Constraint::Percentage(42), Constraint::Percentage(58)]
     } else if app.show_text {
+        // only text: full height
         vec![Constraint::Percentage(100)]
     } else {
+        // only keyboard: full height
         vec![Constraint::Percentage(100)]
     };
+
     let bottom_chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints(b_cons)

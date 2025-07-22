@@ -120,12 +120,12 @@ pub fn handle_nav(app: &mut App, code: KeyCode) {
     }
 }
 
-/// Map raw KeyCode into displayed keyboard labels (e.g., "ESC", "BS", "SPC", or character).
+/// Map raw KeyCode into displayed keyboard labels (e.g., "Esc", "Backspace", "SPACE", or character).
 pub fn map_keycode(code: &KeyCode) -> Option<String> {
     match code {
-        KeyCode::Esc => Some("ESC".into()),
-        KeyCode::Backspace => Some("BS".into()),
-        KeyCode::Char(' ') => Some("SPC".into()),
+        KeyCode::Esc => Some("Esc".into()),
+        KeyCode::Backspace => Some("Backspace".into()),
+        KeyCode::Char(' ') => Some("Space".into()),
         KeyCode::Char(c) => Some(c.to_ascii_uppercase().to_string()),
         _ => None,
     }
