@@ -17,9 +17,9 @@ mod graph;     // src/graph.rs
 mod wpm;       // src/wpm.rs
 mod generator; // src/generator.rs
 
-use app::state::{App, Mode};
+use app::state::{App, Mode, Status};
 use app::input::handle_nav;
-use ui::draw::draw;
+use ui::draw::{draw, draw_finished};
 use ui::keyboard::Keyboard;
 use wpm::{accuracy, elapsed_seconds_since_start, net_wpm};
 
@@ -114,15 +114,58 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                             app.locked = false;
                         }
                     }
+
                     Mode::Insert => {
                         match code {
                             KeyCode::Char(c)   => app.on_key(c),
                             KeyCode::Backspace => app.backspace(),
                             _                  => {}
                         }
+
+                        // Auto‐finish logic:
+                        match app.selected_tab {
+                            0 => {
+                                // Time mode
+                                if app.elapsed_secs() >= app.current_options()[app.selected_value] as u64 {
+                                    app.mode = Mode::Finished;
+                                }
+                            }
+                            1 => {
+                                // Words mode
+                                let completed_chars = app.status
+                                    .iter()
+                                    .position(|&s| s == Status::Untyped)
+                                    .unwrap_or(app.status.len());
+                                let completed_words = app.target[..completed_chars]
+                                    .split_whitespace()
+                                    .count();
+                                if completed_words >= app.current_options()[app.selected_value] as usize {
+                                    app.mode = Mode::Finished;
+                                }
+                            }
+                            _ => {}
+                        }
                     }
+
                     Mode::Finished => {
-                        // TODO: show summary & await Esc/Ctrl‑C
+                        // Draw summary screen
+                        terminal.draw(|f| draw_finished(f, &app))?;
+
+                        // Await Esc (restart) or Ctrl‑C (quit)
+                        loop {
+                            if let Event::Key(KeyEvent { code, modifiers, .. }) = event::read()? {
+                                if code == KeyCode::Esc {
+                                    app = make_app();
+                                    last_sample = 0;
+                                    break;
+                                }
+                                if code == KeyCode::Char('c') && modifiers.contains(KeyModifiers::CONTROL) {
+                                    disable_raw_mode()?;
+                                    execute!(io::stdout(), LeaveAlternateScreen)?;
+                                    return Ok(());
+                                }
+                            }
+                        }
                     }
                 }
             }

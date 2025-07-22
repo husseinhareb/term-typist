@@ -8,6 +8,8 @@ use tui::{
 };
 use crate::app::state::{App, Mode, Status};
 use crate::ui::keyboard::Keyboard;
+use crate::graph;
+use crate::wpm::{accuracy, net_wpm};
 
 /// Main drawing function.
 /// - `cached_net` and `cached_acc` come from your throttled WPM/accuracy logic.
@@ -313,4 +315,79 @@ pub fn draw<B: Backend>(
     // 3) Draw the keyboard inside the inner rect
     keyboard.draw(f, inner);
 }
+}
+
+/// Draw the “finished” summary: left = WPM chart, right = stats.
+pub fn draw_finished<B: Backend>(f: &mut Frame<B>, app: &App) {
+    let size = f.size();
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
+        .split(size);
+
+    // Left: WPM chart
+    graph::draw_wpm_chart(f, chunks[0], &app.samples);
+
+    // Right: stats
+    let elapsed_secs = app.elapsed_secs();
+    let elapsed_f = elapsed_secs as f64;
+    let net = net_wpm(app.correct_chars, app.incorrect_chars, elapsed_f);
+    let acc = accuracy(app.correct_chars, app.incorrect_chars);
+    let raw = app.correct_chars + app.incorrect_chars;
+    let errs = app.incorrect_chars;
+    let test_type = match app.selected_tab {
+        0 => format!("time {}s", app.current_options()[app.selected_value]),
+        1 => format!("words {}", app.current_options()[app.selected_value]),
+        _ => "zen".to_string(),
+    };
+
+    // Simple consistency metric
+    let consistency = {
+        let vs: Vec<f64> = app.samples.iter().map(|&(_, w)| w).collect();
+        if vs.len() > 1 {
+            let mean = vs.iter().sum::<f64>() / vs.len() as f64;
+            let var = vs.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / vs.len() as f64;
+            let std = var.sqrt();
+            format!("{:.0}%", ((1.0 - std / (mean + 1.0)).max(0.0)) * 100.0)
+        } else {
+            "--%".into()
+        }
+    };
+
+    let items = vec![
+        Spans::from(vec![
+            Span::styled("WPM  ", Style::default().fg(Color::Gray)),
+            Span::styled(format!("{:.0}", net), Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        ]),
+        Spans::from(vec![
+            Span::styled("ACC  ", Style::default().fg(Color::Gray)),
+            Span::styled(format!("{:.0}%", acc), Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        ]),
+        Spans::from(vec![
+            Span::styled("RAW  ", Style::default().fg(Color::Gray)),
+            Span::raw(raw.to_string()),
+        ]),
+        Spans::from(vec![
+            Span::styled("ERR  ", Style::default().fg(Color::Gray)),
+            Span::raw(errs.to_string()),
+        ]),
+        Spans::from(vec![
+            Span::styled("TYPE ", Style::default().fg(Color::Gray)),
+            Span::raw(test_type),
+        ]),
+        Spans::from(vec![
+            Span::styled("CONS ", Style::default().fg(Color::Gray)),
+            Span::raw(consistency),
+        ]),
+        Spans::from(vec![
+            Span::styled("TIME ", Style::default().fg(Color::Gray)),
+            Span::raw(format!("{}s", elapsed_secs)),
+        ]),
+    ];
+
+    let stats = Paragraph::new(items)
+        .block(Block::default().borders(Borders::ALL).title("Summary"))
+        .wrap(Wrap { trim: true });
+
+    f.render_widget(stats, chunks[1]);
 }
