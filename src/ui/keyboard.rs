@@ -1,3 +1,4 @@
+// src/ui/keyboard.rs
 use crossterm::event::KeyCode;
 use tui::{
     backend::Backend,

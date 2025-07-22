@@ -1,4 +1,9 @@
-use std::{io, time::{Duration, Instant}};
+// src/ui/lib.rs
+
+use std::{
+    io,
+    time::{Duration, Instant},
+};
 use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
@@ -6,11 +11,11 @@ use crossterm::{
 };
 use tui::{backend::CrosstermBackend, Terminal};
 
-mod app;         // src/app/mod.rs → state.rs, input.rs, config.rs
-mod ui;          // src/ui/mod.rs → draw.rs, keyboard.rs
-mod graph;       // src/graph.rs
-mod wpm;         // src/wpm.rs
-mod generator;   // src/generator.rs
+mod app;       // src/app/mod.rs → state.rs, input.rs, config.rs
+mod ui;        // src/ui/mod.rs → draw.rs, keyboard.rs
+mod graph;     // src/graph.rs
+mod wpm;       // src/wpm.rs
+mod generator; // src/generator.rs
 
 use app::state::{App, Mode};
 use app::input::handle_nav;
@@ -28,11 +33,11 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     // — Timing & WPM cache
     let tick_rate = Duration::from_millis(200);
-    let mut last_tick     = Instant::now();
-    let mut last_sample   = 0;
+    let mut last_tick       = Instant::now();
+    let mut last_sample     = 0;
     let mut last_wpm_update = Instant::now();
-    let mut cached_net    = 0.0;
-    let mut cached_acc    = 0.0;
+    let mut cached_net      = 0.0;
+    let mut cached_acc      = 0.0;
 
     // — App factory (e.g. 30‑word sentence)
     let make_app = || {
@@ -68,38 +73,37 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         let timeout = tick_rate.checked_sub(last_tick.elapsed()).unwrap_or_default();
         if event::poll(timeout)? {
             if let Event::Key(KeyEvent { code, modifiers, .. }) = event::read()? {
-                // Ctrl‐C quits
+                // ── SHIFT+NUMBER PANEL TOGGLES by matching the shifted char
+                match code {
+                    KeyCode::Char('!') => { app.show_mode     = !app.show_mode;     continue 'main; }
+                    KeyCode::Char('@') => { app.show_value    = !app.show_value;    continue 'main; }
+                    KeyCode::Char('#') => { app.show_state    = !app.show_state;    continue 'main; }
+                    KeyCode::Char('$') => { app.show_speed    = !app.show_speed;    continue 'main; }
+                    KeyCode::Char('%') => { app.show_timer    = !app.show_timer;    continue 'main; }
+                    KeyCode::Char('^') => { app.show_text     = !app.show_text;     continue 'main; }
+                    KeyCode::Char('&') => { app.show_keyboard = !app.show_keyboard; continue 'main; }
+                    _ => {}
+                }
+
+                // ── Ctrl‑C quits
                 if code == KeyCode::Char('c') && modifiers.contains(KeyModifiers::CONTROL) {
                     break 'main;
                 }
-                // Esc restarts
+
+                // ── Esc restarts
                 if code == KeyCode::Esc && modifiers.is_empty() {
                     app = make_app();
                     last_sample = 0;
                     continue 'main;
                 }
 
-                // Highlight key in on‑screen keyboard
+                // ── Highlight key in on‑screen keyboard
                 keyboard.handle_key(&code);
 
-                // ── SHIFT+NUMBER PANEL TOGGLES ─────────────────────
-                if modifiers.contains(KeyModifiers::SHIFT) {
-                    match code {
-                        KeyCode::Char('!') => { app.show_mode     = !app.show_mode;     continue 'main; }
-                        KeyCode::Char('@') => { app.show_value    = !app.show_value;    continue 'main; }
-                        KeyCode::Char('#') => { app.show_state    = !app.show_state;    continue 'main; }
-                        KeyCode::Char('$') => { app.show_speed    = !app.show_speed;    continue 'main; }
-                        KeyCode::Char('%') => { app.show_timer    = !app.show_timer;    continue 'main; }
-                        KeyCode::Char('^') => { app.show_text     = !app.show_text;     continue 'main; }
-                        KeyCode::Char('&') => { app.show_keyboard = !app.show_keyboard; continue 'main; }
-                        _ => {}
-                    }
-                }
-
-                // Global navigation (tabs & values)
+                // ── Global navigation (tabs & values)
                 handle_nav(&mut app, code);
 
-                // Mode‑specific input
+                // ── Mode‑specific input
                 match app.mode {
                     Mode::View => {
                         if code == KeyCode::Enter {
@@ -112,9 +116,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     Mode::Insert => {
                         match code {
-                            KeyCode::Char(c)     => app.on_key(c),
-                            KeyCode::Backspace   => app.backspace(),
-                            _                    => {}
+                            KeyCode::Char(c)   => app.on_key(c),
+                            KeyCode::Backspace => app.backspace(),
+                            _                  => {}
                         }
                     }
                     Mode::Finished => {
