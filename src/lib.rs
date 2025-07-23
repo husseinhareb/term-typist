@@ -66,14 +66,14 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
-        // — Draw UI
+        // — Draw UI (or profile)
         terminal.draw(|f| draw(f, &app, &keyboard, cached_net, cached_acc))?;
 
         // — Handle input & toggles
         let timeout = tick_rate.checked_sub(last_tick.elapsed()).unwrap_or_default();
         if event::poll(timeout)? {
             if let Event::Key(KeyEvent { code, modifiers, .. }) = event::read()? {
-                // ── SHIFT+NUMBER PANEL TOGGLES by matching the shifted char
+                // ── SHIFT+NUMBER PANEL TOGGLES
                 match code {
                     KeyCode::Char('!') => { app.show_mode     = !app.show_mode;     continue 'main; }
                     KeyCode::Char('@') => { app.show_value    = !app.show_value;    continue 'main; }
@@ -90,11 +90,19 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     break 'main;
                 }
 
-                // ── Esc restarts
+                // ── Esc: in Profile → back to View; else restart test
                 if code == KeyCode::Esc && modifiers.is_empty() {
-                    app = make_app();
-                    last_sample = 0;
-                    continue 'main;
+                    match app.mode {
+                        Mode::Profile => {
+                            app.mode = Mode::View;
+                            continue 'main;
+                        }
+                        _ => {
+                            app = make_app();
+                            last_sample = 0;
+                            continue 'main;
+                        }
+                    }
                 }
 
                 // ── Highlight key in on‑screen keyboard
@@ -102,6 +110,12 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
                 // ── Global navigation (tabs & values)
                 handle_nav(&mut app, code);
+
+                // ── 'p' opens profile screen (only from View mode)
+                if code == KeyCode::Char('p') && app.mode == Mode::View {
+                    app.mode = Mode::Profile;
+                    continue 'main;
+                }
 
                 // ── Mode‑specific input
                 match app.mode {
@@ -117,22 +131,24 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
                     Mode::Insert => {
                         match code {
-                            KeyCode::Char(c)   => app.on_key(c),
-                            KeyCode::Backspace => app.backspace(),
-                            _                  => {}
+                            KeyCode::Char(c)     => app.on_key(c),
+                            KeyCode::Backspace   => app.backspace(),
+                            _                    => {}
                         }
-
                         // Auto‐finish logic:
                         match app.selected_tab {
                             0 => {
                                 // Time mode
-                                if app.elapsed_secs() >= app.current_options()[app.selected_value] as u64 {
+                                if app.elapsed_secs()
+                                    >= app.current_options()[app.selected_value] as u64
+                                {
                                     app.mode = Mode::Finished;
                                 }
                             }
                             1 => {
                                 // Words mode
-                                let completed_chars = app.status
+                                let completed_chars = app
+                                    .status
                                     .iter()
                                     .position(|&s| s == Status::Untyped)
                                     .unwrap_or(app.status.len());
@@ -159,13 +175,19 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                                     last_sample = 0;
                                     break;
                                 }
-                                if code == KeyCode::Char('c') && modifiers.contains(KeyModifiers::CONTROL) {
+                                if code == KeyCode::Char('c')
+                                    && modifiers.contains(KeyModifiers::CONTROL)
+                                {
                                     disable_raw_mode()?;
                                     execute!(io::stdout(), LeaveAlternateScreen)?;
                                     return Ok(());
                                 }
                             }
                         }
+                    }
+
+                    Mode::Profile => {
+                        // nothing else to do here; Esc handled above
                     }
                 }
             }
