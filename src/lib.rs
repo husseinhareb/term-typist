@@ -16,14 +16,17 @@ mod ui;        // src/ui/mod.rs → draw.rs, keyboard.rs
 mod graph;     // src/graph.rs
 mod wpm;       // src/wpm.rs
 mod generator; // src/generator.rs
+mod db;
 
 use app::state::{App, Mode, Status};
 use app::input::handle_nav;
 use ui::draw::{draw, draw_finished};
 use ui::keyboard::Keyboard;
 use wpm::{accuracy, elapsed_seconds_since_start, net_wpm};
-
+use db::open;
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
+    let conn = open()?;
+
     // — Terminal setup
     enable_raw_mode()?;
     let mut stdout = io::stdout();
