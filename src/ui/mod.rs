@@ -3,4 +3,4 @@
 pub mod draw;
 pub mod keyboard;
 pub mod profile; 
-
+pub mod heatmap;
