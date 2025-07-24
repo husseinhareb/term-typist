@@ -23,7 +23,7 @@ pub fn draw<B: Backend>(
 ) {
     // ── Profile screen takes over entirely
     if app.mode == Mode::Profile {
-        draw_profile(f, app);
+        
         return;
     }
     let size = f.size();

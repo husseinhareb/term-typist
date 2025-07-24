@@ -50,7 +50,7 @@ pub fn open() -> Result<Connection> {
 }
 
 /// Inserts a finished test and its samples.
-pub fn save_test(conn: &Connection, app: &App) -> Result<()> {
+pub fn save_test(conn: &mut Connection, app: &App) -> Result<()> {
     let started_at = Utc::now().to_rfc3339();
     let duration_ms = (app.elapsed_secs() * 1000) as i64;
     let mode = match app.selected_tab {
