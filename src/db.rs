@@ -2,7 +2,7 @@
 // src/db.rs
 
 use rusqlite::{Connection, params, Result};
-use chrono::Utc;
+use chrono::{Local, Utc};
 use crate::app::state::App;
 use std::{fs, path::PathBuf};
 
@@ -51,7 +51,7 @@ pub fn open() -> Result<Connection> {
 
 /// Inserts a finished test and its samples.
 pub fn save_test(conn: &mut Connection, app: &App) -> Result<()> {
-    let started_at = Utc::now().to_rfc3339();
+    let started_at = Local::now().to_rfc3339();
     let duration_ms = (app.elapsed_secs() * 1000) as i64;
     let mode = match app.selected_tab {
         0 => "time",
