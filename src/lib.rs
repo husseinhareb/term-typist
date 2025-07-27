@@ -150,6 +150,11 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     continue 'main;
                 }
 
+                 if code == KeyCode::Char('s') && app.mode == Mode::View {
+                    app.mode = Mode::Settings;
+                    continue 'main;
+                }
+
                 // ── Mode‑specific input
                 match app.mode {
                     Mode::View => {
