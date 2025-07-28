@@ -16,6 +16,7 @@ pub enum Mode {
     Insert,
     Finished,
     Profile,
+    Settings,
 }
 
 /// Application state tracking typing progress, timing, UI flags, and samples.

@@ -8,12 +8,12 @@ use crossterm::{
 };
 use tui::{ backend::CrosstermBackend, Terminal };
 
-mod app; // src/app/mod.rs → state.rs, input.rs, config.rs
-mod ui; // src/ui/mod.rs → draw.rs, keyboard.rs
-mod graph; // src/graph.rs
-mod wpm; // src/wpm.rs
+mod app;       // src/app/mod.rs → state.rs, input.rs, config.rs
+mod ui;        // src/ui/mod.rs → draw.rs, keyboard.rs
+mod graph;     // src/graph.rs
+mod wpm;       // src/wpm.rs
 mod generator; // src/generator.rs
-mod db; // src/db.rs
+mod db;        // src/db.rs
 
 use app::state::{ App, Mode, Status };
 use app::input::handle_nav;
@@ -22,6 +22,8 @@ use ui::keyboard::Keyboard;
 use wpm::{ accuracy, elapsed_seconds_since_start, net_wpm };
 use db::{ open, save_test };
 use crate::ui::profile::draw_profile;
+use crate::ui::settings::draw_settings; 
+
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     // — Open (or create) the SQLite DB under ~/.local/share/term-typist/term_typist.db
     let mut conn = open()?;
@@ -41,7 +43,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut cached_net = 0.0;
     let mut cached_acc = 0.0;
 
-    // — App factory (e.g. 30‑word sentence)
+    // — App factory (e.g. 30-word sentence)
     let make_app = || {
         let sentence = generator::generate_random_sentence(30);
         App::new(sentence)
@@ -68,13 +70,20 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
-        // — Draw typing UI or profile page
+        // — Draw typing UI, Profile, or Settings
         terminal.draw(|f| {
-            if app.mode == Mode::Profile {
-                // draw_profile expects (&mut Frame, &Connection)
-                draw_profile(f, &conn);
-            } else {
-                draw(f, &app, &keyboard, cached_net, cached_acc);
+            match app.mode {
+                Mode::Profile => {
+                    // draw_profile expects (&mut Frame, &Connection)
+                    draw_profile(f, &conn);
+                }
+                Mode::Settings => {
+                    // draw_settings should render your settings UI
+                    draw_settings(f, &app, &keyboard);
+                }
+                _ => {
+                    draw(f, &app, &keyboard, cached_net, cached_acc);
+                }
             }
         })?;
 
@@ -84,53 +93,30 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             if let Event::Key(KeyEvent { code, modifiers, .. }) = event::read()? {
                 // ── SHIFT+NUMBER PANEL TOGGLES
                 match code {
-                    KeyCode::Char('!') => {
-                        app.show_mode = !app.show_mode;
-                        continue 'main;
-                    }
-                    KeyCode::Char('@') => {
-                        app.show_value = !app.show_value;
-                        continue 'main;
-                    }
-                    KeyCode::Char('#') => {
-                        app.show_state = !app.show_state;
-                        continue 'main;
-                    }
-                    KeyCode::Char('$') => {
-                        app.show_speed = !app.show_speed;
-                        continue 'main;
-                    }
-                    KeyCode::Char('%') => {
-                        app.show_timer = !app.show_timer;
-                        continue 'main;
-                    }
-                    KeyCode::Char('^') => {
-                        app.show_text = !app.show_text;
-                        continue 'main;
-                    }
-                    KeyCode::Char('&') => {
-                        app.show_keyboard = !app.show_keyboard;
-                        continue 'main;
-                    }
+                    KeyCode::Char('!') => { app.show_mode     = !app.show_mode;     continue 'main; }
+                    KeyCode::Char('@') => { app.show_value    = !app.show_value;    continue 'main; }
+                    KeyCode::Char('#') => { app.show_state    = !app.show_state;    continue 'main; }
+                    KeyCode::Char('$') => { app.show_speed    = !app.show_speed;    continue 'main; }
+                    KeyCode::Char('%') => { app.show_timer    = !app.show_timer;    continue 'main; }
+                    KeyCode::Char('^') => { app.show_text     = !app.show_text;     continue 'main; }
+                    KeyCode::Char('&') => { app.show_keyboard = !app.show_keyboard; continue 'main; }
                     _ => {}
                 }
 
-                // ── Ctrl‑C quits
+                // ── Ctrl-C quits
                 if code == KeyCode::Char('c') && modifiers.contains(KeyModifiers::CONTROL) {
                     break 'main;
                 }
 
-                // ── Esc: in Profile → back to View; else restart test (and save progress)
+                // ── Esc: in Profile or Settings → back to View; else save & restart test
                 if code == KeyCode::Esc && modifiers.is_empty() {
                     match app.mode {
-                        Mode::Profile => {
+                        Mode::Profile | Mode::Settings => {
                             app.mode = Mode::View;
                             continue 'main;
                         }
                         _ => {
-                            // save whatever was done so far
                             save_test(&mut conn, &app)?;
-                            // restart
                             app = make_app();
                             last_sample = 0;
                             continue 'main;
@@ -138,24 +124,24 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
 
-                // ── Highlight key in on‑screen keyboard
+                // ── Highlight key in on-screen keyboard
                 keyboard.handle_key(&code);
 
                 // ── Global navigation (tabs & values)
                 handle_nav(&mut app, code);
 
-                // ── 'p' opens profile screen (only from View mode)
+                // ── 'p' opens Profile (from View)
                 if code == KeyCode::Char('p') && app.mode == Mode::View {
                     app.mode = Mode::Profile;
                     continue 'main;
                 }
-
-                 if code == KeyCode::Char('s') && app.mode == Mode::View {
+                // ── 's' opens Settings (from View)
+                if code == KeyCode::Char('s') && app.mode == Mode::View {
                     app.mode = Mode::Settings;
                     continue 'main;
                 }
 
-                // ── Mode‑specific input
+                // ── Mode-specific input
                 match app.mode {
                     Mode::View => {
                         if code == KeyCode::Enter {
@@ -169,18 +155,15 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
                     Mode::Insert => {
                         match code {
-                            KeyCode::Char(c) => app.on_key(c),
-                            KeyCode::Backspace => app.backspace(),
-                            _ => {}
+                            KeyCode::Char(c)    => app.on_key(c),
+                            KeyCode::Backspace  => app.backspace(),
+                            _                   => {}
                         }
-                        // Auto‐finish logic:
+                        // Auto‐finish logic
                         match app.selected_tab {
                             0 => {
                                 // Time mode
-                                if
-                                    app.elapsed_secs() >=
-                                    (app.current_options()[app.selected_value] as u64)
-                                {
+                                if app.elapsed_secs() >= (app.current_options()[app.selected_value] as u64) {
                                     app.mode = Mode::Finished;
                                 }
                             }
@@ -193,10 +176,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                                 let completed_words = app.target[..completed_chars]
                                     .split_whitespace()
                                     .count();
-                                if
-                                    completed_words >=
-                                    (app.current_options()[app.selected_value] as usize)
-                                {
+                                if completed_words >= (app.current_options()[app.selected_value] as usize) {
                                     app.mode = Mode::Finished;
                                 }
                             }
@@ -205,11 +185,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     }
 
                     Mode::Finished => {
-                        // persist the just‐finished session
                         save_test(&mut conn, &app)?;
-                        // draw summary screen
                         terminal.draw(|f| draw_finished(f, &app))?;
-                        // await Esc (restart) or Ctrl‑C (quit)
+                        // Await Esc (restart) or Ctrl-C (quit)
                         loop {
                             if let Event::Key(KeyEvent { code, modifiers, .. }) = event::read()? {
                                 if code == KeyCode::Esc {
@@ -217,10 +195,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                                     last_sample = 0;
                                     break;
                                 }
-                                if
-                                    code == KeyCode::Char('c') &&
-                                    modifiers.contains(KeyModifiers::CONTROL)
-                                {
+                                if code == KeyCode::Char('c') && modifiers.contains(KeyModifiers::CONTROL) {
                                     disable_raw_mode()?;
                                     execute!(io::stdout(), LeaveAlternateScreen)?;
                                     return Ok(());
@@ -229,8 +204,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     }
 
-                    Mode::Profile => {
-                        // nothing else here; Esc handled above
+                    Mode::Profile | Mode::Settings => {
+                        // Other keys do nothing here; Esc is already handled above
                     }
                 }
             }
