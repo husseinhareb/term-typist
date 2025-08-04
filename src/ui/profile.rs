@@ -14,44 +14,57 @@ use tui::{
 use crate::graph;
 use crossterm::event::KeyCode;
 
-/// Which “page” of the Recent Tests table we’re on (0 = newest, 1 = next older…).
-static RECENT_PAGE: AtomicUsize = AtomicUsize::new(0);
+/// Absolute cursor into your tests (0 = newest, 1 = next older, …).
+static RECENT_CURSOR: AtomicUsize = AtomicUsize::new(0);
 
 /// Rows per page in the Recent Tests table.
 const PAGE_SIZE: u32 = 10;
 
-/// Reset to page 0 (call when you open the Profile page).
+/// Reset to cursor 0 (call when you open the Profile page).
 pub fn reset_profile_page() {
-    RECENT_PAGE.store(0, Ordering::Relaxed);
+    RECENT_CURSOR.store(0, Ordering::Relaxed);
 }
 
 /// Handle Up/Down arrows when Profile is active:
-/// - Up   → older tests (page += 1)  
-/// - Down → newer tests (page -= 1, clamped at 0)
+/// - Up   → older tests (cursor += 1)  
+/// - Down → newer tests (cursor -= 1, clamped at 0)
 pub fn handle_profile_scroll(key: &KeyCode) {
-    let old = RECENT_PAGE.load(Ordering::Relaxed);
-
     match key {
         KeyCode::Up => {
-            RECENT_PAGE.fetch_add(1, Ordering::Relaxed);
+            RECENT_CURSOR.fetch_add(1, Ordering::Relaxed);
         }
         KeyCode::Down => {
-            let _ = RECENT_PAGE.fetch_update(
+            let _ = RECENT_CURSOR.fetch_update(
                 Ordering::Relaxed,
                 Ordering::Relaxed,
-                |p| p.checked_sub(1),
+                |c| c.checked_sub(1),
             );
         }
         _ => {}
     }
-
-    let new = RECENT_PAGE.load(Ordering::Relaxed);
 }
 
-/// Draws the Profile screen: top stats grid, 365-day summary, WPM chart, and scrollable Recent Tests table.
+/// Draws the Profile screen: top stats grid, 365-day summary, WPM chart,
+/// and a scrollable Recent Tests table with highlight.
 pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection) {
-    // 0) Load page index
-    let page = RECENT_PAGE.load(Ordering::Relaxed) as u32;
+    // 0) Determine total_tests and clamp cursor
+    let total_tests: u32 = conn
+        .prepare("SELECT COUNT(*) FROM tests")
+        .unwrap()
+        .query_row([], |r| r.get(0))
+        .unwrap_or(0);
+
+    let mut cursor = RECENT_CURSOR.load(Ordering::Relaxed) as u32;
+    if total_tests > 0 {
+        cursor = cursor.min(total_tests - 1);
+    } else {
+        cursor = 0;
+    }
+    RECENT_CURSOR.store(cursor as usize, Ordering::Relaxed);
+
+    // Compute which page and index on that page
+    let page = cursor / PAGE_SIZE;
+    let selected_idx = (cursor % PAGE_SIZE) as usize;
 
     //
     // 1) Compute all aggregates
@@ -70,8 +83,7 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection) {
           SUM(duration_ms)/1000.0 AS total_secs
         FROM tests
     "#,
-        )
-        .unwrap();
+        ).unwrap();
     let (started, completed, est_words, avg_wpm, avg_raw, avg_acc, total_secs): (
         u32, u32, f64, f64, f64, f64, f64
     ) = agg
@@ -87,9 +99,9 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection) {
     let mut hnet = conn
         .prepare("SELECT wpm, mode, target_value FROM tests ORDER BY wpm DESC LIMIT 1")
         .unwrap();
-    let (h_wpm, h_mode, h_val): (f64, String, i64) = hnet
-        .query_row([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
-        .unwrap_or((0.0, "".into(), 0));
+    let (h_wpm, h_mode, h_val): (f64, String, i64) =
+        hnet.query_row([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .unwrap_or((0.0, "".into(), 0));
 
     let mut hraw = conn
         .prepare(
@@ -128,7 +140,7 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection) {
         .unwrap();
     let avg_cons: f64 = avgcons.query_row([], |r| r.get(0)).unwrap_or(0.0);
 
-    // Last-10 summary (for the “Recent” block)
+    // Last-10 summary
     let mut last10 = conn
         .prepare(
             r#"
@@ -144,8 +156,7 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection) {
         ORDER BY t.started_at DESC
         LIMIT 10
     "#,
-        )
-        .unwrap();
+        ).unwrap();
 
     let mut rows_iter = last10.query([]).unwrap();
     let mut cnt = 0;
@@ -158,34 +169,31 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection) {
         sum_c += r.get::<_, f64>(3).unwrap_or(0.0);
     }
     let (avg10_wpm, avg10_raw, avg10_acc, avg10_cons) = if cnt > 0 {
-        (sum_w / cnt as f64, sum_r / cnt as f64, sum_a / cnt as f64, sum_c / cnt as f64)
+        (
+            sum_w / cnt as f64,
+            sum_r / cnt as f64,
+            sum_a / cnt as f64,
+            sum_c / cnt as f64,
+        )
     } else {
         (0.0, 0.0, 0.0, 0.0)
     };
 
     //
-    // 2) Layout: top grid (stats) + 365-day summary + bottom (chart + table)
+    // 2) Layout: top grid + 365-day summary + bottom (chart + table)
     //
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(12),
-            Constraint::Length(3),
-            Constraint::Min(5),
-        ])
+        .constraints([Constraint::Length(12), Constraint::Length(3), Constraint::Min(5)])
         .split(f.size());
 
-    // ── TOP GRID ───────────────────────────────────────────
+    // Top grid (Summary, Overall, Recent)
     let cols = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(33),
-            Constraint::Percentage(34),
-            Constraint::Percentage(33),
-        ])
+        .constraints([Constraint::Percentage(33), Constraint::Percentage(34), Constraint::Percentage(33)])
         .split(chunks[0]);
 
-    // Left column: counts & highs
+    // Summary
     let left = Paragraph::new(vec![
         Spans::from(Span::styled("tests started", Style::default().fg(Color::Gray))),
         Spans::from(Span::raw(started.to_string())),
@@ -202,7 +210,7 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection) {
     .block(Block::default().borders(Borders::ALL).title(" Summary "));
     f.render_widget(left, cols[0]);
 
-    // Middle column: overall averages & est words
+    // Overall
     let mid = Paragraph::new(vec![
         Spans::from(Span::styled("estimated words typed", Style::default().fg(Color::Gray))),
         Spans::from(Span::raw(format!("{:.0}", est_words))),
@@ -210,7 +218,11 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection) {
         Spans::from(Span::raw(format!(
             "{} ({:.0}%)",
             completed,
-            if started > 0 { completed as f64 / started as f64 * 100.0 } else { 0.0 }
+            if started > 0 {
+                completed as f64 / started as f64 * 100.0
+            } else {
+                0.0
+            }
         ))),
         Spans::from(Span::styled("average wpm", Style::default().fg(Color::Gray))),
         Spans::from(Span::raw(format!("{:.0}", avg_wpm))),
@@ -224,7 +236,7 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection) {
     .block(Block::default().borders(Borders::ALL).title(" Overall "));
     f.render_widget(mid, cols[1]);
 
-    // Right column: time + last-10 avgs
+    // Recent (last-10 averages)
     let hrs = (total_secs as u64) / 3600;
     let mins = ((total_secs as u64) % 3600) / 60;
     let secs = (total_secs as u64) % 60;
@@ -244,9 +256,7 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection) {
     .block(Block::default().borders(Borders::ALL).title(" Recent "));
     f.render_widget(right, cols[2]);
 
-    //
-    // 3) 365-day summary block
-    //
+    // Last 365 Days summary
     let mut stmt_365 = conn
         .prepare(
             "SELECT
@@ -264,11 +274,14 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection) {
             .unwrap_or((0, 0, 0.0, 0.0));
     let summary = Paragraph::new(vec![Spans::from(vec![
         Span::styled("Total: ", Style::default().fg(Color::Gray)),
-        Span::raw(total.to_string()), Span::raw("   "),
+        Span::raw(total.to_string()),
+        Span::raw("   "),
         Span::styled("Done:  ", Style::default().fg(Color::Gray)),
-        Span::raw(done.to_string()), Span::raw("   "),
+        Span::raw(done.to_string()),
+        Span::raw("   "),
         Span::styled("WPM:   ", Style::default().fg(Color::Gray)),
-        Span::raw(format!("{:.1}", avg_year_wpm)), Span::raw("   "),
+        Span::raw(format!("{:.1}", avg_year_wpm)),
+        Span::raw("   "),
         Span::styled("Acc:   ", Style::default().fg(Color::Gray)),
         Span::raw(format!("{:.1}%", avg_year_acc)),
     ])])
@@ -276,15 +289,13 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection) {
     .wrap(Wrap { trim: true });
     f.render_widget(summary, chunks[1]);
 
-    //
-    // 4) Bottom: WPM chart + scrollable Recent Tests table
-    //
+    // Bottom: WPM chart + table
     let bottom = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(8), Constraint::Min(3)])
         .split(chunks[2]);
 
-    // 4a) WPM-over-time chart
+    // WPM-over-time chart
     let data: Vec<(u64, f64)> = conn
         .prepare(
             "SELECT duration_ms/1000 AS sec, wpm
@@ -299,21 +310,8 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection) {
         .collect();
     graph::draw_wpm_chart(f, bottom[0], &data);
 
-    // 4b) Scrollable Recent Tests table
-    let total_tests: u32 = conn
-        .prepare("SELECT COUNT(*) FROM tests")
-        .unwrap()
-        .query_row([], |r| r.get(0))
-        .unwrap_or(0);
-    let max_page = if total_tests == 0 {
-        0
-    } else {
-        (total_tests - 1) / PAGE_SIZE
-    };
-    let page = page.min(max_page);
-    RECENT_PAGE.store(page as usize, Ordering::Relaxed);
+    // Scrollable Recent Tests table
     let offset = page * PAGE_SIZE;
-
     let sql = format!(
         "SELECT t.started_at, t.wpm, \
          COALESCE((t.correct_chars+t.incorrect_chars)*1.0/5.0/NULLIF(t.duration_ms/60000.0,0),0.0) AS raw, \
@@ -348,17 +346,23 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection) {
         .map(Result::unwrap)
         .collect();
 
+    // Build and highlight rows
     let rows: Vec<Row> = recent
         .into_iter()
-        .map(|(d, net, raw, acc, cons, m)| {
-            Row::new(vec![
+        .enumerate()
+        .map(|(i, (d, net, raw, acc, cons, m))| {
+            let mut row = Row::new(vec![
                 Cell::from(d),
                 Cell::from(format!("{:.1}", net)),
                 Cell::from(format!("{:.1}", raw)),
                 Cell::from(format!("{:.1}%", acc)),
                 Cell::from(format!("{:.1}%", cons)),
                 Cell::from(m),
-            ])
+            ]);
+            if i == selected_idx {
+                row = row.style(Style::default().bg(Color::Blue));
+            }
+            row
         })
         .collect();
 
