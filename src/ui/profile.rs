@@ -1,6 +1,7 @@
 // src/ui/profile.rs
 
-use chrono::{DateTime, FixedOffset};
+use chrono::{DateTime, FixedOffset, Local};
+use crossterm::event::{Event, KeyCode, KeyEvent};
 use rusqlite::Connection;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tui::{
@@ -8,11 +9,11 @@ use tui::{
     layout::{Constraint, Direction, Layout},
     style::{Color, Style},
     text::{Span, Spans},
-    widgets::{Block, Borders, Cell, Paragraph, Row, Table, Wrap},
+    widgets::{Block, Borders, Cell, Paragraph, Row, Table, TableState, Wrap},
     Frame,
 };
+
 use crate::graph;
-use crossterm::event::KeyCode;
 
 /// Absolute cursor into your tests (0 = newest, 1 = next older, …).
 static RECENT_CURSOR: AtomicUsize = AtomicUsize::new(0);
@@ -25,11 +26,28 @@ pub fn reset_profile_page() {
     RECENT_CURSOR.store(0, Ordering::Relaxed);
 }
 
-/// Handle Up/Down arrows when Profile is active:
-/// - Up   → older tests (cursor += 1)  
-/// - Down → newer tests (cursor -= 1, clamped at 0)
+/// Optional convenience: call this if your event loop deals in whole Events.
+/// It will ignore non-key events.
+pub fn handle_profile_event(ev: &Event) {
+    if let Event::Key(KeyEvent { code, .. }) = ev {
+        handle_profile_key(*code);
+    }
+}
+
+/// Back-compat shim (accepts &KeyCode like your original code).
 pub fn handle_profile_scroll(key: &KeyCode) {
-    match key {
+    handle_profile_key(*key);
+}
+
+/// Core key handler. Works for both helpers above.
+/// - Up      → older tests (cursor += 1)
+/// - Down    → newer tests (cursor -= 1, clamped at 0)
+/// - PageUp  → jump older by a page
+/// - PageDown→ jump newer by a page (clamped at 0)
+/// - Home    → newest
+/// - End     → oldest (very large number; draw clamps to max)
+pub fn handle_profile_key(code: KeyCode) {
+    match code {
         KeyCode::Up => {
             RECENT_CURSOR.fetch_add(1, Ordering::Relaxed);
         }
@@ -40,7 +58,63 @@ pub fn handle_profile_scroll(key: &KeyCode) {
                 |c| c.checked_sub(1),
             );
         }
+        KeyCode::PageUp => {
+            RECENT_CURSOR.fetch_add(PAGE_SIZE as usize, Ordering::Relaxed);
+        }
+        KeyCode::PageDown => {
+            let _ = RECENT_CURSOR.fetch_update(
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+                |c| c.checked_sub(PAGE_SIZE as usize),
+            );
+        }
+        KeyCode::Home => {
+            // Newest
+            RECENT_CURSOR.store(0, Ordering::Relaxed);
+        }
+        KeyCode::End => {
+            // Oldest: we don't know total here; set a big number and let draw() clamp.
+            RECENT_CURSOR.store(usize::MAX / 2, Ordering::Relaxed);
+        }
+        // Optional vim keys
+        KeyCode::Char('k') => {
+            RECENT_CURSOR.fetch_add(1, Ordering::Relaxed);
+        }
+        KeyCode::Char('j') => {
+            let _ = RECENT_CURSOR.fetch_update(
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+                |c| c.checked_sub(1),
+            );
+        }
         _ => {}
+    }
+}
+
+/// Simple thousands separator for positive integers.
+fn sep_int(mut n: u64) -> String {
+    if n == 0 {
+        return "0".to_string();
+    }
+    let mut out = String::new();
+    let mut digits = 0usize;
+    while n > 0 {
+        if digits > 0 && digits % 3 == 0 {
+            out.push(',');
+        }
+        out.push(char::from(b'0' + (n % 10) as u8));
+        n /= 10;
+        digits += 1;
+    }
+    out.chars().rev().collect()
+}
+
+/// Format a nonnegative f64 with 0 decimals and thousands separator.
+fn sep_f64_0(f: f64) -> String {
+    if !f.is_finite() || f <= 0.0 {
+        "0".to_string()
+    } else {
+        sep_int(f.round() as u64)
     }
 }
 
@@ -50,13 +124,12 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection) {
     // 0) Determine total_tests and clamp cursor
     let total_tests: u32 = conn
         .prepare("SELECT COUNT(*) FROM tests")
-        .unwrap()
-        .query_row([], |r| r.get(0))
+        .and_then(|mut s| s.query_row([], |r| r.get(0)))
         .unwrap_or(0);
 
     let mut cursor = RECENT_CURSOR.load(Ordering::Relaxed) as u32;
     if total_tests > 0 {
-        cursor = cursor.min(total_tests - 1);
+        cursor = cursor.min(total_tests.saturating_sub(1));
     } else {
         cursor = 0;
     }
@@ -72,56 +145,71 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection) {
     let mut agg = conn
         .prepare(
             r#"
-        SELECT
-          COUNT(*) AS started,
-          SUM(CASE WHEN wpm>0 THEN 1 ELSE 0 END) AS completed,
-          SUM((correct_chars+incorrect_chars)*1.0/5.0) AS est_words,
-          AVG(wpm) FILTER (WHERE wpm>0) AS avg_wpm,
-          AVG((correct_chars+incorrect_chars)*1.0/5.0
-              / NULLIF(duration_ms/60000.0,0)) AS avg_raw,
-          AVG(accuracy) AS avg_acc,
-          SUM(duration_ms)/1000.0 AS total_secs
-        FROM tests
-    "#,
-        ).unwrap();
+            SELECT
+              COUNT(*) AS started,
+              SUM(CASE WHEN wpm>0 THEN 1 ELSE 0 END) AS completed,
+              SUM((correct_chars+incorrect_chars)*1.0/5.0) AS est_words,
+              AVG(wpm) FILTER (WHERE wpm>0) AS avg_wpm,
+              AVG((correct_chars+incorrect_chars)*1.0/5.0
+                  / NULLIF(duration_ms/60000.0,0)) AS avg_raw,
+              AVG(accuracy) AS avg_acc,
+              SUM(duration_ms)/1000.0 AS total_secs
+            FROM tests
+        "#,
+        )
+        .unwrap();
     let (started, completed, est_words, avg_wpm, avg_raw, avg_acc, total_secs): (
-        u32, u32, f64, f64, f64, f64, f64
+        u32,
+        u32,
+        f64,
+        f64,
+        f64,
+        f64,
+        f64,
     ) = agg
         .query_row([], |r| {
             Ok((
-                r.get(0)?, r.get(1)?, r.get(2)?,
-                r.get(3)?, r.get(4)?, r.get(5)?,
+                r.get(0)?,
+                r.get(1)?,
+                r.get(2)?,
+                r.get(3)?,
+                r.get(4)?,
+                r.get(5)?,
                 r.get(6)?,
             ))
         })
         .unwrap_or((0, 0, 0.0, 0.0, 0.0, 0.0, 0.0));
 
+    // Highest net WPM (+ mode/value)
     let mut hnet = conn
         .prepare("SELECT wpm, mode, target_value FROM tests ORDER BY wpm DESC LIMIT 1")
         .unwrap();
-    let (h_wpm, h_mode, h_val): (f64, String, i64) =
-        hnet.query_row([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
-            .unwrap_or((0.0, "".into(), 0));
+    let (h_wpm, h_mode, h_val): (f64, String, i64) = hnet
+        .query_row([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+        .unwrap_or((0.0, "".into(), 0));
 
+    // Highest raw WPM
     let mut hraw = conn
         .prepare(
             "SELECT (correct_chars+incorrect_chars)*1.0/5.0
-                / NULLIF(duration_ms/60000.0,0) AS raw
-             FROM tests
-             ORDER BY raw DESC LIMIT 1",
+                 / NULLIF(duration_ms/60000.0,0) AS raw
+              FROM tests
+              ORDER BY raw DESC LIMIT 1",
         )
         .unwrap();
     let h_raw: f64 = hraw.query_row([], |r| r.get(0)).unwrap_or(0.0);
 
+    // Highest accuracy
     let mut hacc = conn
         .prepare("SELECT accuracy FROM tests ORDER BY accuracy DESC LIMIT 1")
         .unwrap();
     let h_acc: f64 = hacc.query_row([], |r| r.get(0)).unwrap_or(0.0);
 
+    // Highest/average consistency (safe: guard MAX against 0/NULL)
     let mut hcons = conn
         .prepare(
-            "SELECT MAX(cons) FROM (
-               SELECT 100.0*MIN(wpm)/MAX(wpm) AS cons
+            "SELECT COALESCE(MAX(cons), 0.0) FROM (
+               SELECT 100.0*MIN(wpm)/NULLIF(MAX(wpm),0) AS cons
                  FROM samples
                 GROUP BY test_id
              )",
@@ -131,8 +219,8 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection) {
 
     let mut avgcons = conn
         .prepare(
-            "SELECT AVG(cons) FROM (
-               SELECT 100.0*MIN(wpm)/MAX(wpm) AS cons
+            "SELECT COALESCE(AVG(cons), 0.0) FROM (
+               SELECT 100.0*MIN(wpm)/NULLIF(MAX(wpm),0) AS cons
                  FROM samples
                 GROUP BY test_id
              )",
@@ -140,26 +228,27 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection) {
         .unwrap();
     let avg_cons: f64 = avgcons.query_row([], |r| r.get(0)).unwrap_or(0.0);
 
-    // Last-10 summary
+    // Last-10 summary (safe consistency and raw)
     let mut last10 = conn
         .prepare(
             r#"
-        SELECT
-          t.wpm,
-          COALESCE((t.correct_chars+t.incorrect_chars)*1.0/5.0
-            / NULLIF(t.duration_ms/60000.0,0), 0) AS raw,
-          t.accuracy,
-          COALESCE(100.0*MIN(s.wpm)/MAX(s.wpm), 0) AS cons
-        FROM tests t
-        LEFT JOIN samples s ON s.test_id = t.id
-        GROUP BY t.id
-        ORDER BY t.started_at DESC
-        LIMIT 10
-    "#,
-        ).unwrap();
+            SELECT
+              t.wpm,
+              COALESCE((t.correct_chars+t.incorrect_chars)*1.0/5.0
+                / NULLIF(t.duration_ms/60000.0,0), 0) AS raw,
+              t.accuracy,
+              COALESCE(100.0*MIN(s.wpm)/NULLIF(MAX(s.wpm),0), 0) AS cons
+            FROM tests t
+            LEFT JOIN samples s ON s.test_id = t.id
+            GROUP BY t.id
+            ORDER BY t.started_at DESC
+            LIMIT 10
+        "#,
+        )
+        .unwrap();
 
     let mut rows_iter = last10.query([]).unwrap();
-    let mut cnt = 0;
+    let mut cnt = 0usize;
     let (mut sum_w, mut sum_r, mut sum_a, mut sum_c) = (0.0, 0.0, 0.0, 0.0);
     while let Ok(Some(r)) = rows_iter.next() {
         cnt += 1;
@@ -190,47 +279,86 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection) {
     // Top grid (Summary, Overall, Recent)
     let cols = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(33), Constraint::Percentage(34), Constraint::Percentage(33)])
+        .constraints([
+            Constraint::Percentage(33),
+            Constraint::Percentage(34),
+            Constraint::Percentage(33),
+        ])
         .split(chunks[0]);
 
     // Summary
     let left = Paragraph::new(vec![
-        Spans::from(Span::styled("tests started", Style::default().fg(Color::Gray))),
-        Spans::from(Span::raw(started.to_string())),
-        Spans::from(Span::styled("highest wpm", Style::default().fg(Color::Gray))),
+        Spans::from(Span::styled(
+            "tests started",
+            Style::default().fg(Color::Gray),
+        )),
+        Spans::from(Span::raw(sep_int(started as u64))),
+        Spans::from(Span::styled(
+            "highest wpm",
+            Style::default().fg(Color::Gray),
+        )),
         Spans::from(Span::raw(format!("{:.0}", h_wpm))),
         Spans::from(Span::raw(format!("{} {}", h_mode, h_val))),
-        Spans::from(Span::styled("highest raw wpm", Style::default().fg(Color::Gray))),
+        Spans::from(Span::styled(
+            "highest raw wpm",
+            Style::default().fg(Color::Gray),
+        )),
         Spans::from(Span::raw(format!("{:.0}", h_raw))),
-        Spans::from(Span::styled("highest accuracy", Style::default().fg(Color::Gray))),
+        Spans::from(Span::styled(
+            "highest accuracy",
+            Style::default().fg(Color::Gray),
+        )),
         Spans::from(Span::raw(format!("{:.0}%", h_acc))),
-        Spans::from(Span::styled("highest consistency", Style::default().fg(Color::Gray))),
+        Spans::from(Span::styled(
+            "highest consistency",
+            Style::default().fg(Color::Gray),
+        )),
         Spans::from(Span::raw(format!("{:.0}%", h_cons))),
     ])
     .block(Block::default().borders(Borders::ALL).title(" Summary "));
     f.render_widget(left, cols[0]);
 
     // Overall
+    let completion_pct = if started > 0 {
+        (completed as f64 / started as f64) * 100.0
+    } else {
+        0.0
+    };
+
     let mid = Paragraph::new(vec![
-        Spans::from(Span::styled("estimated words typed", Style::default().fg(Color::Gray))),
-        Spans::from(Span::raw(format!("{:.0}", est_words))),
-        Spans::from(Span::styled("tests completed", Style::default().fg(Color::Gray))),
+        Spans::from(Span::styled(
+            "estimated words typed",
+            Style::default().fg(Color::Gray),
+        )),
+        Spans::from(Span::raw(sep_f64_0(est_words))),
+        Spans::from(Span::styled(
+            "tests completed",
+            Style::default().fg(Color::Gray),
+        )),
         Spans::from(Span::raw(format!(
             "{} ({:.0}%)",
-            completed,
-            if started > 0 {
-                completed as f64 / started as f64 * 100.0
-            } else {
-                0.0
-            }
+            sep_int(completed as u64),
+            completion_pct
         ))),
-        Spans::from(Span::styled("average wpm", Style::default().fg(Color::Gray))),
+        Spans::from(Span::styled(
+            "average wpm",
+            Style::default().fg(Color::Gray),
+        )),
         Spans::from(Span::raw(format!("{:.0}", avg_wpm))),
-        Spans::from(Span::styled("average raw wpm", Style::default().fg(Color::Gray))),
+        Spans::from(Span::styled(
+            "average raw wpm",
+            Style::default().fg(Color::Gray),
+        )),
         Spans::from(Span::raw(format!("{:.0}", avg_raw))),
-        Spans::from(Span::styled("avg accuracy", Style::default().fg(Color::Gray))),
+        Spans::from(Span::styled(
+            "avg accuracy",
+            Style::default().fg(Color::Gray),
+        )),
         Spans::from(Span::raw(format!("{:.0}%", avg_acc))),
-        Spans::from(Span::styled("avg consistency", Style::default().fg(Color::Gray))),
+        Spans::from(Span::styled(
+            "avg consistency",
+            Style::default().fg(Color::Gray),
+        )),
         Spans::from(Span::raw(format!("{:.0}%", avg_cons))),
     ])
     .block(Block::default().borders(Borders::ALL).title(" Overall "));
@@ -241,22 +369,36 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection) {
     let mins = ((total_secs as u64) % 3600) / 60;
     let secs = (total_secs as u64) % 60;
     let right = Paragraph::new(vec![
-        Spans::from(Span::styled("time typing", Style::default().fg(Color::Gray))),
+        Spans::from(Span::styled(
+            "time typing",
+            Style::default().fg(Color::Gray),
+        )),
         Spans::from(Span::raw(format!("{:02}:{:02}:{:02}", hrs, mins, secs))),
-        Spans::from(Span::styled("avg wpm (last 10)", Style::default().fg(Color::Gray))),
+        Spans::from(Span::styled(
+            "avg wpm (last 10)",
+            Style::default().fg(Color::Gray),
+        )),
         Spans::from(Span::raw(format!("{:.0}", avg10_wpm))),
-        Spans::from(Span::styled("avg raw wpm (last 10)", Style::default().fg(Color::Gray))),
+        Spans::from(Span::styled(
+            "avg raw wpm (last 10)",
+            Style::default().fg(Color::Gray),
+        )),
         Spans::from(Span::raw(format!("{:.0}", avg10_raw))),
-        Spans::from(Span::styled("avg accuracy (last 10)", Style::default().fg(Color::Gray))),
+        Spans::from(Span::styled(
+            "avg accuracy (last 10)",
+            Style::default().fg(Color::Gray),
+        )),
         Spans::from(Span::raw(format!("{:.0}%", avg10_acc))),
-        Spans::from(Span::styled("avg consistency (last 10)", Style::default().fg(Color::Gray))),
+        Spans::from(Span::styled(
+            "avg consistency (last 10)",
+            Style::default().fg(Color::Gray),
+        )),
         Spans::from(Span::raw(format!("{:.0}%", avg10_cons))),
-        Spans::from(Span::styled("Export CSV", Style::default().fg(Color::Gray))),
     ])
     .block(Block::default().borders(Borders::ALL).title(" Recent "));
     f.render_widget(right, cols[2]);
 
-    // Last 365 Days summary
+    // Last 365 Days summary — use datetime window (no midnight snap)
     let mut stmt_365 = conn
         .prepare(
             "SELECT
@@ -265,19 +407,18 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection) {
                AVG(wpm) FILTER (WHERE wpm>0),
                AVG(accuracy)
              FROM tests
-             WHERE started_at >= date('now','-364 days')",
+             WHERE started_at >= datetime('now','-365 days')",
         )
         .unwrap();
-    let (done, total, avg_year_wpm, avg_year_acc): (u32, u32, f64, f64) =
-        stmt_365
-            .query_row([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))
-            .unwrap_or((0, 0, 0.0, 0.0));
+    let (done, total, avg_year_wpm, avg_year_acc): (u32, u32, f64, f64) = stmt_365
+        .query_row([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))
+        .unwrap_or((0, 0, 0.0, 0.0));
     let summary = Paragraph::new(vec![Spans::from(vec![
         Span::styled("Total: ", Style::default().fg(Color::Gray)),
-        Span::raw(total.to_string()),
+        Span::raw(sep_int(total as u64)),
         Span::raw("   "),
         Span::styled("Done:  ", Style::default().fg(Color::Gray)),
-        Span::raw(done.to_string()),
+        Span::raw(sep_int(done as u64)),
         Span::raw("   "),
         Span::styled("WPM:   ", Style::default().fg(Color::Gray)),
         Span::raw(format!("{:.1}", avg_year_wpm)),
@@ -295,34 +436,35 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection) {
         .constraints([Constraint::Length(8), Constraint::Min(3)])
         .split(chunks[2]);
 
-    // WPM-over-time chart
+    // WPM-over-time chart (chronological by started_at)
     let data: Vec<(u64, f64)> = conn
         .prepare(
-            "SELECT duration_ms/1000 AS sec, wpm
+            "SELECT CAST(strftime('%s', started_at) AS INTEGER) AS ts, wpm
                FROM tests
-              WHERE started_at >= date('now','-364 days')
-              ORDER BY sec ASC",
+              WHERE started_at >= datetime('now','-365 days')
+              ORDER BY ts ASC",
         )
         .unwrap()
         .query_map([], |r| Ok((r.get::<_, i64>(0)? as u64, r.get(1)?)))
         .unwrap()
-        .map(Result::unwrap)
+        .filter_map(Result::ok)
         .collect();
     graph::draw_wpm_chart(f, bottom[0], &data);
 
     // Scrollable Recent Tests table
     let offset = page * PAGE_SIZE;
     let sql = format!(
-        "SELECT t.started_at, t.wpm, \
-         COALESCE((t.correct_chars+t.incorrect_chars)*1.0/5.0/NULLIF(t.duration_ms/60000.0,0),0.0) AS raw, \
-         t.accuracy, \
-         COALESCE(100.0*MIN(s.wpm)/MAX(s.wpm),0.0) AS consistency, \
-         t.mode, t.target_value \
-         FROM tests t \
-         LEFT JOIN samples s ON s.test_id=t.id \
-         GROUP BY t.id \
-         ORDER BY t.started_at DESC \
-         LIMIT {} OFFSET {}",
+        "SELECT t.started_at, t.wpm,
+                COALESCE((t.correct_chars+t.incorrect_chars)*1.0/5.0
+                  / NULLIF(t.duration_ms/60000.0,0), 0.0) AS raw,
+                t.accuracy,
+                COALESCE(100.0*MIN(s.wpm)/NULLIF(MAX(s.wpm),0), 0.0) AS consistency,
+                t.mode, t.target_value
+           FROM tests t
+      LEFT JOIN samples s ON s.test_id=t.id
+          GROUP BY t.id
+          ORDER BY t.started_at DESC
+          LIMIT {} OFFSET {}",
         PAGE_SIZE, offset
     );
 
@@ -330,11 +472,17 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection) {
     let recent: Vec<_> = stmt
         .query_map([], |r| {
             let ts: String = r.get(0)?;
-            let dt = DateTime::parse_from_rfc3339(&ts)
-                .map(|dt: DateTime<FixedOffset>| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+            // Display in local time if timestamp parses; otherwise fall back to raw string.
+            let dt_str = DateTime::parse_from_rfc3339(&ts)
+                .map(|dt: DateTime<FixedOffset>| {
+                    dt.with_timezone(&Local)
+                        .format("%Y-%m-%d %H:%M:%S")
+                        .to_string()
+                })
                 .unwrap_or(ts.clone());
+
             Ok((
-                dt,
+                dt_str,
                 r.get::<_, f64>(1)?,
                 r.get::<_, f64>(2)?,
                 r.get::<_, f64>(3)?,
@@ -343,46 +491,57 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection) {
             ))
         })
         .unwrap()
-        .map(Result::unwrap)
+        .filter_map(Result::ok)
         .collect();
 
-    // Build and highlight rows
+    // Build rows
     let rows: Vec<Row> = recent
         .into_iter()
-        .enumerate()
-        .map(|(i, (d, net, raw, acc, cons, m))| {
-            let mut row = Row::new(vec![
+        .map(|(d, net, raw, acc, cons, m)| {
+            Row::new(vec![
                 Cell::from(d),
                 Cell::from(format!("{:.1}", net)),
                 Cell::from(format!("{:.1}", raw)),
                 Cell::from(format!("{:.1}%", acc)),
                 Cell::from(format!("{:.1}%", cons)),
                 Cell::from(m),
-            ]);
-            if i == selected_idx {
-                row = row.style(Style::default().bg(Color::Blue));
-            }
-            row
+            ])
         })
         .collect();
+
+    // Use a *stateful* table for selection so highlight always reflects the cursor.
+    let mut state = TableState::default();
+    state.select(Some(selected_idx));
 
     let table = Table::new(rows)
         .header(
             Row::new(vec![
-                "Started At", "WPM", "Raw", "Accuracy", "Consistency", "Mode",
+                "Started At (local)",
+                "WPM",
+                "Raw",
+                "Accuracy",
+                "Consistency",
+                "Mode",
             ])
             .style(Style::default().fg(Color::Yellow)),
         )
-        .block(Block::default().borders(Borders::ALL).title(" Recent Tests "))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(" Recent Tests  (↑ older, ↓ newer, PgUp/PgDn page, Home/End) "),
+        )
         .widths(&[
             Constraint::Length(19),
             Constraint::Length(6),
             Constraint::Length(6),
             Constraint::Length(9),
             Constraint::Length(11),
-            Constraint::Length(10),
+            Constraint::Length(12),
         ])
-        .column_spacing(1);
+        .column_spacing(1)
+        .highlight_style(Style::default().bg(Color::Blue))
+        .highlight_symbol(" ");
 
-    f.render_widget(table, bottom[1]);
+    // IMPORTANT: render as stateful to activate highlight behavior
+    f.render_stateful_widget(table, bottom[1], &mut state);
 }
