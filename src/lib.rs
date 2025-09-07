@@ -204,7 +204,13 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     }
 
-                    Mode::Profile | Mode::Settings => {
+                    Mode::Profile => {
+                        // Handle profile navigation keys
+                        use crate::ui::profile::handle_profile_key;
+                        handle_profile_key(code);
+                    }
+
+                    Mode::Settings => {
                         // Other keys do nothing here; Esc is already handled above
                     }
                 }

@@ -40,33 +40,33 @@ pub fn handle_profile_scroll(key: &KeyCode) {
 }
 
 /// Core key handler. Works for both helpers above.
-/// - Up      → older tests (cursor += 1)
-/// - Down    → newer tests (cursor -= 1, clamped at 0)
-/// - PageUp  → jump older by a page
-/// - PageDown→ jump newer by a page (clamped at 0)
+/// - Up      → newer tests (cursor -= 1, clamped at 0)
+/// - Down    → older tests (cursor += 1)
+/// - PageUp  → jump newer by a page
+/// - PageDown→ jump older by a page
 /// - Home    → newest
 /// - End     → oldest (very large number; draw clamps to max)
 pub fn handle_profile_key(code: KeyCode) {
     match code {
         KeyCode::Up => {
-            RECENT_CURSOR.fetch_add(1, Ordering::Relaxed);
-        }
-        KeyCode::Down => {
             let _ = RECENT_CURSOR.fetch_update(
                 Ordering::Relaxed,
                 Ordering::Relaxed,
                 |c| c.checked_sub(1),
             );
         }
-        KeyCode::PageUp => {
-            RECENT_CURSOR.fetch_add(PAGE_SIZE as usize, Ordering::Relaxed);
+        KeyCode::Down => {
+            RECENT_CURSOR.fetch_add(1, Ordering::Relaxed);
         }
-        KeyCode::PageDown => {
+        KeyCode::PageUp => {
             let _ = RECENT_CURSOR.fetch_update(
                 Ordering::Relaxed,
                 Ordering::Relaxed,
                 |c| c.checked_sub(PAGE_SIZE as usize),
             );
+        }
+        KeyCode::PageDown => {
+            RECENT_CURSOR.fetch_add(PAGE_SIZE as usize, Ordering::Relaxed);
         }
         KeyCode::Home => {
             // Newest
@@ -78,14 +78,14 @@ pub fn handle_profile_key(code: KeyCode) {
         }
         // Optional vim keys
         KeyCode::Char('k') => {
-            RECENT_CURSOR.fetch_add(1, Ordering::Relaxed);
-        }
-        KeyCode::Char('j') => {
             let _ = RECENT_CURSOR.fetch_update(
                 Ordering::Relaxed,
                 Ordering::Relaxed,
                 |c| c.checked_sub(1),
             );
+        }
+        KeyCode::Char('j') => {
+            RECENT_CURSOR.fetch_add(1, Ordering::Relaxed);
         }
         _ => {}
     }
@@ -135,9 +135,14 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection) {
     }
     RECENT_CURSOR.store(cursor as usize, Ordering::Relaxed);
 
-    // Compute which page and index on that page
-    let page = cursor / PAGE_SIZE;
-    let selected_idx = (cursor % PAGE_SIZE) as usize;
+    // Compute a sliding-window offset so arrow keys shift the visible list by
+    // one item (remove the first, append the next) rather than jumping in
+    // PAGE_SIZE blocks. We choose an offset so the selected item is at
+    // `selected_idx = cursor - offset` and 0 <= selected_idx < PAGE_SIZE.
+    let max_offset = if total_tests > PAGE_SIZE { total_tests - PAGE_SIZE } else { 0 };
+    let mut offset = if cursor < PAGE_SIZE { 0 } else { cursor.saturating_sub(PAGE_SIZE - 1) };
+    offset = offset.min(max_offset);
+    let selected_idx = (cursor.saturating_sub(offset)) as usize;
 
     //
     // 1) Compute all aggregates
@@ -452,21 +457,20 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection) {
     graph::draw_wpm_chart(f, bottom[0], &data);
 
     // Scrollable Recent Tests table
-    let offset = page * PAGE_SIZE;
-    let sql = format!(
-        "SELECT t.started_at, t.wpm,
-                COALESCE((t.correct_chars+t.incorrect_chars)*1.0/5.0
-                  / NULLIF(t.duration_ms/60000.0,0), 0.0) AS raw,
-                t.accuracy,
-                COALESCE(100.0*MIN(s.wpm)/NULLIF(MAX(s.wpm),0), 0.0) AS consistency,
-                t.mode, t.target_value
-           FROM tests t
-      LEFT JOIN samples s ON s.test_id=t.id
-          GROUP BY t.id
-          ORDER BY t.started_at DESC
-          LIMIT {} OFFSET {}",
-        PAGE_SIZE, offset
-    );
+        let sql = format!(
+                "SELECT t.started_at, t.wpm,
+                                COALESCE((t.correct_chars+t.incorrect_chars)*1.0/5.0
+                                    / NULLIF(t.duration_ms/60000.0,0), 0.0) AS raw,
+                                t.accuracy,
+                                COALESCE(100.0*MIN(s.wpm)/NULLIF(MAX(s.wpm),0), 0.0) AS consistency,
+                                t.mode, t.target_value
+                     FROM tests t
+            LEFT JOIN samples s ON s.test_id=t.id
+                    GROUP BY t.id
+                    ORDER BY t.started_at DESC
+                    LIMIT {} OFFSET {}",
+                PAGE_SIZE, offset
+        );
 
     let mut stmt = conn.prepare(&sql).unwrap();
     let recent: Vec<_> = stmt
@@ -511,7 +515,17 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection) {
 
     // Use a *stateful* table for selection so highlight always reflects the cursor.
     let mut state = TableState::default();
-    state.select(Some(selected_idx));
+    // In sliding window mode, selected_idx should always be valid within the
+    // fetched rows unless we have no data at all. The sliding window logic
+    // above ensures selected_idx is computed correctly relative to the offset.
+    let display_selected = if rows.is_empty() {
+        None
+    } else {
+        // selected_idx should be valid since it's computed as cursor - offset
+        // and we fetched rows starting from offset. Only clamp if necessary.
+        Some(selected_idx.min(rows.len().saturating_sub(1)))
+    };
+    state.select(display_selected);
 
     let table = Table::new(rows)
         .header(
