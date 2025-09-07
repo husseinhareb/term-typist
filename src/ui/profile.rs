@@ -435,10 +435,13 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection) {
     .wrap(Wrap { trim: true });
     f.render_widget(summary, chunks[1]);
 
-    // Bottom: WPM chart + table
+    // Bottom: WPM chart + table. Anchor the table to the bottom by giving
+    // it a fixed height and allowing the chart area to take the remaining
+    // space above it. This prevents the table from floating up when the
+    // profile pane is taller than expected.
     let bottom = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(8), Constraint::Min(3)])
+        .constraints([Constraint::Min(3), Constraint::Length(8)])
         .split(chunks[2]);
 
     // WPM-over-time chart (chronological by started_at)

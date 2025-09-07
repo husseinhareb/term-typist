@@ -19,6 +19,14 @@ pub enum Mode {
     Settings,
 }
 
+/// Supported keyboard layouts for on-screen keyboard and input mapping.
+#[derive(PartialEq, Clone, Copy)]
+pub enum KeyboardLayout {
+    Qwerty,
+    Azerty,
+    Dvorak,
+}
+
 /// Application state tracking typing progress, timing, UI flags, and samples.
 pub struct App {
     pub target: String,
@@ -43,6 +51,7 @@ pub struct App {
     pub show_timer: bool,
     pub show_text: bool,
     pub show_keyboard: bool,
+    pub keyboard_layout: KeyboardLayout,
 }
 
 impl App {
@@ -71,6 +80,7 @@ impl App {
             show_timer: true,
             show_text: true,
             show_keyboard: true,
+            keyboard_layout: KeyboardLayout::Qwerty,
         }
     }
 

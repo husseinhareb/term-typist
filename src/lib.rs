@@ -211,6 +211,15 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     }
 
                     Mode::Settings => {
+                        // Allow cycling keyboard layout with 'l'
+                        if code == KeyCode::Char('l') {
+                            app.keyboard_layout = match app.keyboard_layout {
+                                crate::app::state::KeyboardLayout::Qwerty => crate::app::state::KeyboardLayout::Azerty,
+                                crate::app::state::KeyboardLayout::Azerty => crate::app::state::KeyboardLayout::Dvorak,
+                                crate::app::state::KeyboardLayout::Dvorak => crate::app::state::KeyboardLayout::Qwerty,
+                            };
+                            continue 'main;
+                        }
                         // Other keys do nothing here; Esc is already handled above
                     }
                 }

@@ -61,6 +61,14 @@ pub fn draw_settings<B: Backend>(f: &mut Frame<B>, app: &App, _keyboard: &Keyboa
             "[{}] Show on-screen keyboard",
             if app.show_keyboard { 'x' } else { ' ' }
         )),
+        ListItem::new(format!(
+            "Keyboard layout: {}",
+            match app.keyboard_layout {
+                crate::app::state::KeyboardLayout::Qwerty => "QWERTY",
+                crate::app::state::KeyboardLayout::Azerty => "AZERTY",
+                crate::app::state::KeyboardLayout::Dvorak => "Dvorak",
+            }
+        )),
     ];
 
     // Wrap them in a List widget
@@ -68,7 +76,7 @@ pub fn draw_settings<B: Backend>(f: &mut Frame<B>, app: &App, _keyboard: &Keyboa
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title("Toggles (read-only)"),
+                .title("Toggles (press 'l' to cycle layout)"),
         )
         // style the title of the List to stand out
         .highlight_style(Style::default().add_modifier(Modifier::BOLD))

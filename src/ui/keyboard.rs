@@ -50,14 +50,16 @@ impl Keyboard {
                 ("B", 1), ("N", 1), ("M", 1), (",", 1), (".", 1),
                 ("/", 1), ("Shift", 4),
             ],
-            &[("Space", 12)],
+            &[("Space", 6)],
         ];
-
-        // Split the full area vertically into equal-height rows
+        // Use the entire available area for the keyboard and distribute it
+        // evenly between the rows so the keys occupy the full pane height.
+        let keyboard_area = area;
+        let row_count = rows.len() as u32;
         let row_areas = Layout::default()
             .direction(Direction::Vertical)
-            .constraints(vec![Constraint::Length(3); rows.len()])
-            .split(area);
+            .constraints(vec![Constraint::Ratio(1, row_count); rows.len()])
+            .split(keyboard_area);
 
         for (r, &row) in rows.iter().enumerate() {
             let row_area = row_areas[r];
@@ -94,7 +96,17 @@ impl Keyboard {
 
             // Render each key
             for (i, &(label, _)) in row.iter().enumerate() {
-                let key_area = key_areas[i];
+                // If the final row contains only the Space key, render that key
+                // using the entire keyboard_area so it becomes a single large
+                // button that fills the keyboard section.
+                // If the final row contains only the Space key, render that key
+                // using the last row's area so it fills the bottom row only and
+                // doesn't overlap the rows above.
+                let key_area = if r + 1 == rows.len() && row.len() == 1 && label == "Space" {
+                    row_area
+                } else {
+                    key_areas[i]
+                };
                 let is_pressed = self.pressed_key.as_deref() == Some(label);
 
                 let bg = if is_pressed { Color::Yellow } else { Color::Reset };
