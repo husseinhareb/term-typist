@@ -1,5 +1,6 @@
 // /src/app/state.rs
 use std::time::{Duration, Instant};
+use crate::theme::Theme;
 
 /// Character typing status for each target character.
 #[derive(PartialEq, Clone, Copy)]
@@ -52,6 +53,7 @@ pub struct App {
     pub show_text: bool,
     pub show_keyboard: bool,
     pub keyboard_layout: KeyboardLayout,
+    pub theme: Theme,
 }
 
 impl App {
@@ -81,6 +83,7 @@ impl App {
             show_text: true,
             show_keyboard: true,
             keyboard_layout: KeyboardLayout::Qwerty,
+            theme: Theme::load(),
         }
     }
 

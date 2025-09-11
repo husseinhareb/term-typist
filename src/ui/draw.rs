@@ -82,15 +82,15 @@ pub fn draw<B: Backend>(
                         .title(
                             Spans::from(
                                 vec![
-                                    Span::styled("¹", Style::default().fg(Color::LightBlue)),
+                                    Span::styled("¹", Style::default().fg(app.theme.title_accent.to_tui_color())),
                                     Span::raw(" Mode")
                                 ]
                             )
                         )
                 )
                 .select(app.selected_tab)
-                .style(Style::default().fg(Color::White))
-                .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+                .style(Style::default().fg(app.theme.tab_inactive.to_tui_color()))
+                .highlight_style(Style::default().fg(app.theme.tab_active.to_tui_color()).add_modifier(Modifier::BOLD))
                 .divider(Span::raw(" "));
 
             f.render_widget(tabs, cols[col_idx]);
@@ -106,10 +106,10 @@ pub fn draw<B: Backend>(
                     if i == app.selected_value {
                         Span::styled(
                             s,
-                            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                            Style::default().fg(app.theme.highlight.to_tui_color()).add_modifier(Modifier::BOLD)
                         )
                     } else {
-                        Span::raw(s)
+                        Span::styled(s, Style::default().fg(app.theme.foreground.to_tui_color()))
                     }
                 );
                 spans.push(Span::raw(" "));
@@ -121,7 +121,7 @@ pub fn draw<B: Backend>(
                     .title(
                         Spans::from(
                             vec![
-                                Span::styled("²", Style::default().fg(Color::LightBlue)),
+                                Span::styled("²", Style::default().fg(app.theme.title_accent.to_tui_color())),
                                 Span::raw(" Value")
                             ]
                         )
@@ -174,7 +174,7 @@ pub fn draw<B: Backend>(
                     .title(
                         Spans::from(
                             vec![
-                                Span::styled("³", Style::default().fg(Color::LightBlue)),
+                                Span::styled("³", Style::default().fg(app.theme.title_accent.to_tui_color())),
                                 Span::raw(" State")
                             ]
                         )
@@ -197,7 +197,7 @@ pub fn draw<B: Backend>(
                     .title(
                         Spans::from(
                             vec![
-                                Span::styled("⁴", Style::default().fg(Color::LightBlue)),
+                                Span::styled("⁴", Style::default().fg(app.theme.title_accent.to_tui_color())),
                                 Span::raw(" Speed")
                             ]
                         )
@@ -253,7 +253,7 @@ pub fn draw<B: Backend>(
                     .title(
                         Spans::from(
                             vec![
-                                Span::styled("⁵", Style::default().fg(Color::LightBlue)),
+                                Span::styled("⁵", Style::default().fg(app.theme.title_accent.to_tui_color())),
                                 Span::raw(" Timer")
                             ]
                         )
@@ -300,8 +300,8 @@ pub fn draw<B: Backend>(
                             .title(
                                 Spans::from(
                                     vec![
-                                        Span::styled("⁵", Style::default().fg(Color::LightBlue)),
-                                        Span::raw(" Timer")
+                                        Span::styled("⁶", Style::default().fg(app.theme.title_accent.to_tui_color())),
+                                        Span::raw(" Text")
                                     ]
                                 )
                             )
@@ -321,16 +321,16 @@ pub fn draw<B: Backend>(
                 .enumerate()
                 .map(|(i, (ch, st))| {
                     let base_style = match st {
-                        Status::Untyped => Style::default().fg(Color::White),
-                        Status::Correct => Style::default().fg(Color::Green),
-                        Status::Incorrect => Style::default().fg(Color::Red),
+                        Status::Untyped => Style::default().fg(app.theme.text_untyped.to_tui_color()),
+                        Status::Correct => Style::default().fg(app.theme.text_correct.to_tui_color()),
+                        Status::Incorrect => Style::default().fg(app.theme.text_incorrect.to_tui_color()),
                     };
                     if i == cur && app.mode == Mode::Insert {
                         Span::styled(
                             ch.to_string(),
                             base_style
-                                .bg(Color::Yellow)
-                                .fg(Color::Black)
+                                .bg(app.theme.text_cursor_bg.to_tui_color())
+                                .fg(app.theme.text_cursor_fg.to_tui_color())
                                 .add_modifier(Modifier::BOLD)
                         )
                     } else {
@@ -347,7 +347,7 @@ pub fn draw<B: Backend>(
                             .title(
                                 Spans::from(
                                     vec![
-                                        Span::styled("⁶", Style::default().fg(Color::LightBlue)),
+                                        Span::styled("⁶", Style::default().fg(app.theme.title_accent.to_tui_color())),
                                         Span::raw(" Text")
                                     ]
                                 )
@@ -369,7 +369,7 @@ pub fn draw<B: Backend>(
             .title(
                 Spans::from(
                     vec![
-                        Span::styled("⁷", Style::default().fg(Color::LightBlue)),
+                        Span::styled("⁷", Style::default().fg(app.theme.title_accent.to_tui_color())),
                         Span::raw(" Keyboard")
                     ]
                 )
@@ -380,7 +380,7 @@ pub fn draw<B: Backend>(
         f.render_widget(block, area);
 
         // 3) Draw the keyboard inside the inner rect
-        keyboard.draw(f, inner);
+        keyboard.draw(f, inner, &app.theme);
     }
 }
 
@@ -431,44 +431,50 @@ pub fn draw_finished<B: Backend>(f: &mut Frame<B>, app: &App) {
     let items = vec![
         Spans::from(
             vec![
-                Span::styled("WPM  ", Style::default().fg(Color::Gray)),
+                Span::styled("WPM  ", Style::default().fg(app.theme.stats_label.to_tui_color())),
                 Span::styled(
                     format!("{:.0}", net),
-                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                    Style::default().fg(app.theme.stats_value.to_tui_color()).add_modifier(Modifier::BOLD)
                 )
             ]
         ),
         Spans::from(
             vec![
-                Span::styled("ACC  ", Style::default().fg(Color::Gray)),
+                Span::styled("ACC  ", Style::default().fg(app.theme.stats_label.to_tui_color())),
                 Span::styled(
                     format!("{:.0}%", acc),
-                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                    Style::default().fg(app.theme.stats_value.to_tui_color()).add_modifier(Modifier::BOLD)
                 )
             ]
         ),
         Spans::from(
             vec![
-                Span::styled("RAW  ", Style::default().fg(Color::Gray)),
-                Span::raw(raw.to_string())
+                Span::styled("RAW  ", Style::default().fg(app.theme.stats_label.to_tui_color())),
+                Span::styled(raw.to_string(), Style::default().fg(app.theme.foreground.to_tui_color()))
             ]
         ),
         Spans::from(
             vec![
-                Span::styled("ERR  ", Style::default().fg(Color::Gray)),
-                Span::raw(errs.to_string())
+                Span::styled("ERR  ", Style::default().fg(app.theme.stats_label.to_tui_color())),
+                Span::styled(errs.to_string(), Style::default().fg(app.theme.foreground.to_tui_color()))
             ]
         ),
         Spans::from(
-            vec![Span::styled("TYPE ", Style::default().fg(Color::Gray)), Span::raw(test_type)]
-        ),
-        Spans::from(
-            vec![Span::styled("CONS ", Style::default().fg(Color::Gray)), Span::raw(consistency)]
+            vec![
+                Span::styled("TYPE ", Style::default().fg(app.theme.stats_label.to_tui_color())), 
+                Span::styled(test_type, Style::default().fg(app.theme.foreground.to_tui_color()))
+            ]
         ),
         Spans::from(
             vec![
-                Span::styled("TIME ", Style::default().fg(Color::Gray)),
-                Span::raw(format!("{}s", elapsed_secs))
+                Span::styled("CONS ", Style::default().fg(app.theme.stats_label.to_tui_color())), 
+                Span::styled(consistency, Style::default().fg(app.theme.foreground.to_tui_color()))
+            ]
+        ),
+        Spans::from(
+            vec![
+                Span::styled("TIME ", Style::default().fg(app.theme.stats_label.to_tui_color())),
+                Span::styled(format!("{}s", elapsed_secs), Style::default().fg(app.theme.foreground.to_tui_color()))
             ]
         )
     ];

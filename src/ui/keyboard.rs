@@ -9,6 +9,7 @@ use tui::{
     Frame,
 };
 use crate::app::input::map_keycode;
+use crate::theme::Theme;
 
 /// On-screen keyboard widget with realistic key sizes and pressed‐key highlighting.
 pub struct Keyboard {
@@ -27,7 +28,7 @@ impl Keyboard {
     }
 
     /// Draw the keyboard into the given `area`, splitting into rows and keys.
-    pub fn draw<B: Backend>(&self, f: &mut Frame<B>, area: Rect) {
+    pub fn draw<B: Backend>(&self, f: &mut Frame<B>, area: Rect, theme: &Theme) {
         // Define rows as arrays of (label, width units)
         let rows: &[&[(&str, u16)]] = &[
             &[
@@ -109,8 +110,16 @@ impl Keyboard {
                 };
                 let is_pressed = self.pressed_key.as_deref() == Some(label);
 
-                let bg = if is_pressed { Color::Yellow } else { Color::Reset };
-                let fg = if is_pressed { Color::Black } else { Color::White };
+                let bg = if is_pressed { 
+                    theme.key_pressed_bg.to_tui_color() 
+                } else { 
+                    theme.key_normal_bg.to_tui_color() 
+                };
+                let fg = if is_pressed { 
+                    theme.key_pressed_fg.to_tui_color() 
+                } else { 
+                    theme.key_normal_fg.to_tui_color() 
+                };
 
                 // 1) Fill the *entire* key_area with the background color (flush to border)
                 let fill = Block::default().style(Style::default().bg(bg));
@@ -119,7 +128,7 @@ impl Keyboard {
                 // 2) Draw the border OVER the fill in the foreground color
                 let border = Block::default()
                     .borders(Borders::ALL)
-                    .border_style(Style::default().fg(fg));
+                    .border_style(Style::default().fg(theme.key_border.to_tui_color()));
                 f.render_widget(border, key_area);
 
                 // 3) Center the label inside the full key_area

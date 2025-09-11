@@ -1,0 +1,49 @@
+# term-typist theme configuration - Colorful Theme Example
+# 
+# This file demonstrates using RGB colors and a more vibrant color scheme.
+# Colors can be specified in three ways:
+#   1. Named colors: "red", "blue", "green", "yellow", "cyan", "magenta", 
+#      "white", "black", "gray", "light_red", "light_blue", etc.
+#   2. RGB colors: [255, 128, 0] for orange
+#   3. Indexed colors: 42 (for terminal color index 42)
+#
+# After making changes, restart term-typist to see the new theme.
+
+# General UI colors
+background = "reset"
+foreground = [255, 255, 255]
+border = [100, 150, 200]
+title = [255, 255, 255]
+title_accent = [255, 165, 0]  # Orange
+
+# Text area colors
+text_untyped = [200, 200, 200]
+text_correct = [50, 255, 50]   # Bright green
+text_incorrect = [255, 100, 100] # Bright red
+text_cursor_bg = [255, 215, 0]  # Gold
+text_cursor_fg = [0, 0, 0]
+
+# UI element colors
+tab_active = [255, 215, 0]      # Gold
+tab_inactive = [180, 180, 180]
+highlight = [255, 165, 0]       # Orange
+stats_label = [128, 128, 128]
+stats_value = [100, 255, 255]   # Bright cyan
+
+# Keyboard colors
+key_normal_bg = "reset"
+key_normal_fg = [255, 255, 255]
+key_pressed_bg = [255, 100, 255] # Bright magenta
+key_pressed_fg = [0, 0, 0]
+key_border = [100, 150, 200]
+
+# Chart colors
+chart_line = [0, 255, 255]      # Cyan
+chart_axis = [255, 255, 255]
+chart_labels = [150, 150, 150]
+
+# Status colors
+success = [50, 255, 50]
+warning = [255, 255, 0]
+error = [255, 50, 50]
+info = [100, 200, 255]

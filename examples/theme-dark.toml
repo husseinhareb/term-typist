@@ -1,0 +1,49 @@
+# term-typist theme configuration - Dark Theme Example
+# 
+# This file controls the colors used throughout the term-typist application.
+# Colors can be specified in three ways:
+#   1. Named colors: "red", "blue", "green", "yellow", "cyan", "magenta", 
+#      "white", "black", "gray", "light_red", "light_blue", etc.
+#   2. RGB colors: [255, 128, 0] for orange
+#   3. Indexed colors: 42 (for terminal color index 42)
+#
+# After making changes, restart term-typist to see the new theme.
+
+# General UI colors
+background = "black"
+foreground = "light_cyan"
+border = "dark_gray"
+title = "white"
+title_accent = "cyan"
+
+# Text area colors
+text_untyped = "gray"
+text_correct = "light_green"
+text_incorrect = "light_red"
+text_cursor_bg = "cyan"
+text_cursor_fg = "black"
+
+# UI element colors
+tab_active = "light_yellow"
+tab_inactive = "gray"
+highlight = "light_yellow"
+stats_label = "dark_gray"
+stats_value = "light_cyan"
+
+# Keyboard colors
+key_normal_bg = "black"
+key_normal_fg = "light_cyan"
+key_pressed_bg = "cyan"
+key_pressed_fg = "black"
+key_border = "dark_gray"
+
+# Chart colors
+chart_line = "light_blue"
+chart_axis = "gray"
+chart_labels = "dark_gray"
+
+# Status colors
+success = "light_green"
+warning = "light_yellow"
+error = "light_red"
+info = "light_blue"

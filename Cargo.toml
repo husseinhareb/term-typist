@@ -12,5 +12,7 @@ ctrlc = "3.4.4"
 dirs = "5.0.1"
 rand = "0.8"
 rusqlite = "0.37.0"
+serde = { version = "1.0", features = ["derive"] }
 termion = "3.0.0"
+toml = "0.8"
 tui = "0.19.0"
