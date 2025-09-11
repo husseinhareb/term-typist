@@ -108,7 +108,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     break 'main;
                 }
 
-                // ── Esc: in Profile or Settings → back to View; else save & restart test
+                // ── Esc: in Profile or Settings → back to View; else restart test
+                // Only save the test to the DB if it was actually started (app.start.is_some()).
                 if code == KeyCode::Esc && modifiers.is_empty() {
                     match app.mode {
                         Mode::Profile | Mode::Settings => {
@@ -116,7 +117,11 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                             continue 'main;
                         }
                         _ => {
-                            save_test(&mut conn, &app)?;
+                            if app.start.is_some() {
+                                // Test was started; persist stats
+                                save_test(&mut conn, &app)?;
+                            }
+                            // Restart the test regardless of whether it started
                             app = make_app();
                             last_sample = 0;
                             continue 'main;
@@ -185,12 +190,14 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     }
 
                     Mode::Finished => {
+                        // Finished tests are results of a started test, so save unconditionally
                         save_test(&mut conn, &app)?;
                         terminal.draw(|f| draw_finished(f, &app))?;
                         // Await Esc (restart) or Ctrl-C (quit)
                         loop {
                             if let Event::Key(KeyEvent { code, modifiers, .. }) = event::read()? {
                                 if code == KeyCode::Esc {
+                                    // When viewing finished results, Esc restarts without saving again
                                     app = make_app();
                                     last_sample = 0;
                                     break;
