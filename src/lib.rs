@@ -14,6 +14,7 @@ mod graph;     // src/graph.rs
 mod wpm;       // src/wpm.rs
 mod generator; // src/generator.rs
 mod db;        // src/db.rs
+mod theme;     // src/theme.rs
 
 use app::state::{ App, Mode, Status };
 use app::input::handle_nav;
@@ -21,6 +22,7 @@ use ui::draw::{ draw, draw_finished };
 use ui::keyboard::Keyboard;
 use wpm::{ accuracy, elapsed_seconds_since_start, net_wpm };
 use db::{ open, save_test };
+use theme::Theme;
 use crate::ui::profile::draw_profile;
 use crate::ui::settings::draw_settings; 
 
