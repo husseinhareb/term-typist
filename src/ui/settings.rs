@@ -70,6 +70,10 @@ pub fn draw_settings<B: Backend>(f: &mut Frame<B>, app: &App, _keyboard: &Keyboa
                 crate::app::state::KeyboardLayout::Qwertz => "QWERTZ",
             }
         )),
+        ListItem::new(format!(
+            "Keyboard switch: {} (press 'k' to cycle)",
+            app.keyboard_switch
+        )),
     ];
 
     // Wrap them in a List widget

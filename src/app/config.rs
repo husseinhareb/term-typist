@@ -142,6 +142,65 @@ pub fn read_nb_of_words() -> io::Result<i32> {
     Ok(30)
 }
 
+/// Write the keyboard switch into the config file as: keyboard_switch <NAME>
+pub fn write_keyboard_switch(switch: &str) -> io::Result<()> {
+    let file_path = config_file()?;
+    let mut file_content = String::new();
+
+    if file_path.exists() {
+        let mut file = File::open(&file_path)?;
+        file.read_to_string(&mut file_content)?;
+    }
+
+    let mut updated_content = String::new();
+    let mut found = false;
+
+    for line in file_content.lines() {
+        if line.trim().starts_with("keyboard_switch") {
+            found = true;
+            updated_content.push_str(&format!("keyboard_switch {}\n", switch));
+        } else {
+            updated_content.push_str(line);
+            updated_content.push('\n');
+        }
+    }
+
+    if !found {
+        updated_content.push_str(&format!("keyboard_switch {}\n", switch));
+    }
+
+    if let Some(parent) = file_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    let mut file = File::create(&file_path)?;
+    file.write_all(updated_content.as_bytes())?;
+    Ok(())
+}
+
+/// Read keyboard_switch from config file. Returns Ok(name) if found.
+pub fn read_keyboard_switch() -> io::Result<Option<String>> {
+    let file_path = config_file()?;
+    if !file_path.exists() {
+        return Ok(None);
+    }
+    let file = File::open(&file_path)?;
+    let reader = BufReader::new(file);
+
+    for line in reader.lines() {
+        let line = line?;
+        if line.trim().starts_with("keyboard_switch") {
+            let name = line
+                .split_whitespace()
+                .skip(1)
+                .next()
+                .map(|s| s.to_string());
+            return Ok(name);
+        }
+    }
+    Ok(None)
+}
+
 // Function to get the path of the config file
 fn config_file() -> Result<PathBuf, io::Error> {
     let config_dir = match dirs::config_dir() {

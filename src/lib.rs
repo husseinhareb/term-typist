@@ -15,6 +15,7 @@ mod wpm;       // src/wpm.rs
 mod generator; // src/generator.rs
 mod db;        // src/db.rs
 mod theme;     // src/theme.rs
+mod audio;     // src/audio.rs
 
 use app::state::{ App, Mode, Status };
 use app::input::handle_nav;
@@ -52,6 +53,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     };
     let mut app = make_app();
     let mut keyboard = Keyboard::new();
+    // Initialize audio playback (background thread/stream)
+    audio::init();
 
     'main: loop {
         // — Throttle WPM/accuracy updates once per second
@@ -125,8 +128,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                             }
                             // Restart the test regardless of whether it started
                             let cur_layout = app.keyboard_layout;
+                            let cur_switch = app.keyboard_switch.clone();
                             app = make_app();
                             app.keyboard_layout = cur_layout;
+                            app.keyboard_switch = cur_switch;
                             // Clear any pressed key highlight
                             keyboard.pressed_key = None;
                             last_sample = 0;
@@ -205,8 +210,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                                 if code == KeyCode::Esc {
                                     // When viewing finished results, Esc restarts without saving again
                                     let cur_layout = app.keyboard_layout;
+                                    let cur_switch = app.keyboard_switch.clone();
                                     app = make_app();
                                     app.keyboard_layout = cur_layout;
+                                    app.keyboard_switch = cur_switch;
                                     keyboard.pressed_key = None;
                                     last_sample = 0;
                                     break;
@@ -244,6 +251,21 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                                 crate::app::state::KeyboardLayout::Dvorak => "dvorak",
                                 crate::app::state::KeyboardLayout::Qwertz => "qwertz",
                             });
+                            continue 'main;
+                        }
+                        // Cycle available keyboard switch samples with 'k'
+                        if code == KeyCode::Char('k') {
+                            let list = crate::audio::list_switches();
+                            if !list.is_empty() {
+                                // find current index
+                                let mut idx = list.iter().position(|s| s == &app.keyboard_switch).unwrap_or(0);
+                                idx = (idx + 1) % list.len();
+                                app.keyboard_switch = list[idx].clone();
+                                // persist selection
+                                let _ = crate::app::config::write_keyboard_switch(&app.keyboard_switch);
+                                // clear pressed highlight
+                                keyboard.pressed_key = None;
+                            }
                             continue 'main;
                         }
                         // Other keys do nothing here; Esc is already handled above

@@ -142,20 +142,24 @@ impl Keyboard {
                     theme.key_normal_fg.to_tui_color() 
                 };
 
-                // 1) Fill the *entire* key_area with the background color (flush to border)
-                let fill = Block::default().style(Style::default().bg(bg));
-                f.render_widget(fill, key_area);
-
-                // 2) Draw the border OVER the fill in the foreground color
+                // 1) Draw the border block (so the visible border is produced)
                 let border = Block::default()
                     .borders(Borders::ALL)
-                    .border_style(Style::default().fg(theme.key_border.to_tui_color()));
-                f.render_widget(border, key_area);
+                    .border_style(Style::default().fg(theme.key_border.to_tui_color()))
+                    .style(Style::default().bg(bg));
+                // Render the border (clone so we can still call methods on `border`)
+                f.render_widget(border.clone(), key_area);
 
-                // 3) Center the label inside the full key_area
+                // 2) Fill only the block's inner rect so the background/highlight
+                // does not overflow the border characters.
+                let fill_area = border.inner(key_area);
+                let fill = Block::default().style(Style::default().bg(bg));
+                f.render_widget(fill, fill_area);
+
+                // 3) Center the label inside the inner rect (no background on outer)
                 let txt = Paragraph::new(Span::styled(label, Style::default().fg(fg).bg(bg)))
                     .alignment(Alignment::Center);
-                f.render_widget(txt, key_area);
+                f.render_widget(txt, fill_area);
             }
         }
     }

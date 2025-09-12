@@ -54,6 +54,7 @@ pub struct App {
     pub show_text: bool,
     pub show_keyboard: bool,
     pub keyboard_layout: KeyboardLayout,
+    pub keyboard_switch: String,
     pub theme: Theme,
 }
 
@@ -72,6 +73,16 @@ impl App {
             },
             _ => KeyboardLayout::Qwerty,
         };
+        // Determine persisted keyboard switch, fallback to first available or "mxblack"
+        let kb_switch = match crate::app::config::read_keyboard_switch() {
+            Ok(Some(name)) => name,
+            _ => {
+                // try to list available switches from audio assets
+                let list = crate::audio::list_switches();
+                if !list.is_empty() { list[0].clone() } else { "mxblack".into() }
+            }
+        };
+
         App {
             target: target.clone(),
             status: vec![Status::Untyped; target.chars().count()],
@@ -95,13 +106,16 @@ impl App {
             show_text: true,
             show_keyboard: true,
             keyboard_layout: kb_layout,
+            keyboard_switch: kb_switch,
             theme: Theme::load(),
         }
     }
 
     /// Handle a typed character, updating status, counts, and locking logic.
     pub fn on_key(&mut self, key: char) {
-        self.last_input = Instant::now();
+    self.last_input = Instant::now();
+    // Play typing click for accepted characters (non-blocking) using selected switch
+    crate::audio::play_for(&self.keyboard_switch, "GENERIC");
         // Free-text (zen) mode
         if self.selected_tab == 2 {
             self.free_text.push(key);
