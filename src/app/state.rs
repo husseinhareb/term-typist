@@ -61,6 +61,17 @@ impl App {
     /// Construct a new App with a target sentence and default state.
     pub fn new(target: String) -> Self {
         let now = Instant::now();
+        // Attempt to read persisted keyboard layout from config
+        let kb_layout = match crate::app::config::read_keyboard_layout() {
+            Ok(Some(name)) => match name.to_lowercase().as_str() {
+                "qwerty" => KeyboardLayout::Qwerty,
+                "azerty" => KeyboardLayout::Azerty,
+                "dvorak" => KeyboardLayout::Dvorak,
+                "qwertz" => KeyboardLayout::Qwertz,
+                _ => KeyboardLayout::Qwerty,
+            },
+            _ => KeyboardLayout::Qwerty,
+        };
         App {
             target: target.clone(),
             status: vec![Status::Untyped; target.chars().count()],
@@ -83,7 +94,7 @@ impl App {
             show_timer: true,
             show_text: true,
             show_keyboard: true,
-            keyboard_layout: KeyboardLayout::Qwerty,
+            keyboard_layout: kb_layout,
             theme: Theme::load(),
         }
     }

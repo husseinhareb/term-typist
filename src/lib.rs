@@ -230,6 +230,13 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                             };
                             // Clear any pressed key highlight so it doesn't point to an unrelated key
                             keyboard.pressed_key = None;
+                            // Persist layout choice to config
+                            let _ = crate::app::config::write_keyboard_layout(match app.keyboard_layout {
+                                crate::app::state::KeyboardLayout::Qwerty => "qwerty",
+                                crate::app::state::KeyboardLayout::Azerty => "azerty",
+                                crate::app::state::KeyboardLayout::Dvorak => "dvorak",
+                                crate::app::state::KeyboardLayout::Qwertz => "qwertz",
+                            });
                             continue 'main;
                         }
                         // Other keys do nothing here; Esc is already handled above
