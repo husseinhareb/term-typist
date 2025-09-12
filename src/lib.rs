@@ -124,7 +124,11 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                                 save_test(&mut conn, &app)?;
                             }
                             // Restart the test regardless of whether it started
+                            let cur_layout = app.keyboard_layout;
                             app = make_app();
+                            app.keyboard_layout = cur_layout;
+                            // Clear any pressed key highlight
+                            keyboard.pressed_key = None;
                             last_sample = 0;
                             continue 'main;
                         }
@@ -200,7 +204,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                             if let Event::Key(KeyEvent { code, modifiers, .. }) = event::read()? {
                                 if code == KeyCode::Esc {
                                     // When viewing finished results, Esc restarts without saving again
+                                    let cur_layout = app.keyboard_layout;
                                     app = make_app();
+                                    app.keyboard_layout = cur_layout;
+                                    keyboard.pressed_key = None;
                                     last_sample = 0;
                                     break;
                                 }
