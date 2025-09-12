@@ -67,6 +67,7 @@ pub fn draw_settings<B: Backend>(f: &mut Frame<B>, app: &App, _keyboard: &Keyboa
                 crate::app::state::KeyboardLayout::Qwerty => "QWERTY",
                 crate::app::state::KeyboardLayout::Azerty => "AZERTY",
                 crate::app::state::KeyboardLayout::Dvorak => "Dvorak",
+                crate::app::state::KeyboardLayout::Qwertz => "QWERTZ",
             }
         )),
     ];

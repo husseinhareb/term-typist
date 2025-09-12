@@ -10,6 +10,7 @@ use tui::{
 };
 use crate::app::input::map_keycode;
 use crate::theme::Theme;
+use crate::app::state::KeyboardLayout;
 
 /// On-screen keyboard widget with realistic key sizes and pressed‐key highlighting.
 pub struct Keyboard {
@@ -28,31 +29,46 @@ impl Keyboard {
     }
 
     /// Draw the keyboard into the given `area`, splitting into rows and keys.
-    pub fn draw<B: Backend>(&self, f: &mut Frame<B>, area: Rect, theme: &Theme) {
-        // Define rows as arrays of (label, width units)
-        let rows: &[&[(&str, u16)]] = &[
-            &[
-                ("Esc", 2), ("1", 1), ("2", 1), ("3", 1), ("4", 1),
-                ("5", 1), ("6", 1), ("7", 1), ("8", 1), ("9", 1),
-                ("0", 1), ("-", 1), ("=", 1), ("Backspace", 3),
-            ],
-            &[
-                ("Tab", 3), ("Q", 1), ("W", 1), ("E", 1), ("R", 1),
-                ("T", 1), ("Y", 1), ("U", 1), ("I", 1), ("O", 1),
-                ("P", 1), ("[", 1), ("]", 1), ("\\", 2),
-            ],
-            &[
-                ("CapsLk", 3), ("A", 1), ("S", 1), ("D", 1), ("F", 1),
-                ("G", 1), ("H", 1), ("J", 1), ("K", 1), ("L", 1),
-                (";", 1), ("'", 1), ("Enter", 3),
-            ],
-            &[
-                ("Shift", 4), ("Z", 1), ("X", 1), ("C", 1), ("V", 1),
-                ("B", 1), ("N", 1), ("M", 1), (",", 1), (".", 1),
-                ("/", 1), ("Shift", 4),
-            ],
-            &[("Space", 6)],
+    pub fn draw<B: Backend>(&self, f: &mut Frame<B>, area: Rect, theme: &Theme, layout: KeyboardLayout) {
+        // Define rows per layout as arrays of (label, width units)
+        let rows_qwerty: &[&[(&str, u16)]] = &[
+            &[("Esc", 2), ("1", 1), ("2", 1), ("3", 1), ("4", 1), ("5", 1), ("6", 1), ("7", 1), ("8", 1), ("9", 1), ("0", 1), ("-", 1), ("=", 1), ("Backspace", 3)],
+            &[("Tab", 3), ("Q", 1), ("W", 1), ("E", 1), ("R", 1), ("T", 1), ("Y", 1), ("U", 1), ("I", 1), ("O", 1), ("P", 1), ("[", 1), ("]", 1), ("\\", 2)],
+            &[("CapsLk", 3), ("A", 1), ("S", 1), ("D", 1), ("F", 1), ("G", 1), ("H", 1), ("J", 1), ("K", 1), ("L", 1), (";", 1), ("'", 1), ("Enter", 3)],
+            &[("Shift", 4), ("Z", 1), ("X", 1), ("C", 1), ("V", 1), ("B", 1), ("N", 1), ("M", 1), (",", 1), (".", 1), ("/", 1), ("Shift", 4)],
+            &[ ("Space", 6) ],
         ];
+
+        let rows_azerty: &[&[(&str, u16)]] = &[
+            &[("Esc", 2), ("&", 1), ("é", 1), ("\"", 1), ("'", 1), ("(", 1), ("-", 1), ("è", 1), ("_", 1), ("ç", 1), ("à", 1), ("°", 1), ("=", 1), ("Backspace", 3)],
+            &[("Tab", 3), ("A", 1), ("Z", 1), ("E", 1), ("R", 1), ("T", 1), ("Y", 1), ("U", 1), ("I", 1), ("O", 1), ("P", 1), ("^", 1), ("$", 1), ("\\", 2)],
+            &[("CapsLk", 3), ("Q", 1), ("S", 1), ("D", 1), ("F", 1), ("G", 1), ("H", 1), ("J", 1), ("K", 1), ("L", 1), ("M", 1), ("ù", 1), ("Enter", 3)],
+            &[("Shift", 4), (",", 1), (";", 1), (":", 1), ("!", 1), ("%", 1), ("?", 1), ("/", 1), (".", 1), ("-", 1), ("Shift", 4)],
+            &[ ("Space", 6) ],
+        ];
+
+        let rows_dvorak: &[&[(&str, u16)]] = &[
+            &[("Esc", 2), ("1", 1), ("2", 1), ("3", 1), ("4", 1), ("5", 1), ("6", 1), ("7", 1), ("8", 1), ("9", 1), ("0", 1), ("[", 1), ("]", 1), ("Backspace", 3)],
+            &[("Tab", 3), ("'", 1), (",", 1), (".", 1), ("P", 1), ("Y", 1), ("F", 1), ("G", 1), ("C", 1), ("R", 1), ("L", 1), ("/", 1), ("=", 1), ("\\", 2)],
+            &[("CapsLk", 3), ("A", 1), ("O", 1), ("E", 1), ("U", 1), ("I", 1), ("D", 1), ("H", 1), ("T", 1), ("N", 1), ("S", 1), ("-", 1), ("Enter", 3)],
+            &[("Shift", 4), (";", 1), ("Q", 1), ("J", 1), ("K", 1), ("X", 1), ("B", 1), ("M", 1), ("W", 1), ("V", 1), ("Z", 1), ("Shift", 4)],
+            &[ ("Space", 6) ],
+        ];
+
+        let rows_qwertz: &[&[(&str, u16)]] = &[
+            &[("Esc", 2), ("1", 1), ("2", 1), ("3", 1), ("4", 1), ("5", 1), ("6", 1), ("7", 1), ("8", 1), ("9", 1), ("0", 1), ("ß", 1), ("´", 1), ("Backspace", 3)],
+            &[("Tab", 3), ("Q", 1), ("W", 1), ("E", 1), ("R", 1), ("T", 1), ("Z", 1), ("U", 1), ("I", 1), ("O", 1), ("P", 1), ("ü", 1), ("+", 1), ("\\", 2)],
+            &[("CapsLk", 3), ("A", 1), ("S", 1), ("D", 1), ("F", 1), ("G", 1), ("H", 1), ("J", 1), ("K", 1), ("L", 1), ("ö", 1), ("ä", 1), ("Enter", 3)],
+            &[("Shift", 4), ("<", 1), ("Y", 1), ("X", 1), ("C", 1), ("V", 1), ("B", 1), ("N", 1), ("M", 1), (",", 1), (".", 1), ("-", 1), ("Shift", 4)],
+            &[ ("Space", 6) ],
+        ];
+
+        let rows: &[&[(&str, u16)]] = match layout {
+            KeyboardLayout::Qwerty => rows_qwerty,
+            KeyboardLayout::Azerty => rows_azerty,
+            KeyboardLayout::Dvorak => rows_dvorak,
+            KeyboardLayout::Qwertz => rows_qwertz,
+        };
         // Use the entire available area for the keyboard and distribute it
         // evenly between the rows so the keys occupy the full pane height.
         let keyboard_area = area;
@@ -62,7 +78,7 @@ impl Keyboard {
             .constraints(vec![Constraint::Ratio(1, row_count); rows.len()])
             .split(keyboard_area);
 
-        for (r, &row) in rows.iter().enumerate() {
+    for (r, &row) in rows.iter().enumerate() {
             let row_area = row_areas[r];
 
             // Total “unit” width of this row
@@ -108,7 +124,12 @@ impl Keyboard {
                 } else {
                     key_areas[i]
                 };
-                let is_pressed = self.pressed_key.as_deref() == Some(label);
+                // Compare normalized forms (case/Unicode-aware) so labels with different
+                // casing or accents still match the pressed key string.
+                let is_pressed = match &self.pressed_key {
+                    Some(pk) => pk.to_lowercase() == label.to_lowercase(),
+                    None => false,
+                };
 
                 let bg = if is_pressed { 
                     theme.key_pressed_bg.to_tui_color() 

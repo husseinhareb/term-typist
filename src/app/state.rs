@@ -26,6 +26,7 @@ pub enum KeyboardLayout {
     Qwerty,
     Azerty,
     Dvorak,
+    Qwertz,
 }
 
 /// Application state tracking typing progress, timing, UI flags, and samples.

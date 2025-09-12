@@ -393,8 +393,8 @@ pub fn draw<B: Backend>(
         let inner = block.inner(area);
         f.render_widget(block, area);
 
-        // 3) Draw the keyboard inside the inner rect
-        keyboard.draw(f, inner, &app.theme);
+    // 3) Draw the keyboard inside the inner rect
+    keyboard.draw(f, inner, &app.theme, app.keyboard_layout);
     }
 }
 

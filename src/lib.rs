@@ -225,8 +225,11 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                             app.keyboard_layout = match app.keyboard_layout {
                                 crate::app::state::KeyboardLayout::Qwerty => crate::app::state::KeyboardLayout::Azerty,
                                 crate::app::state::KeyboardLayout::Azerty => crate::app::state::KeyboardLayout::Dvorak,
-                                crate::app::state::KeyboardLayout::Dvorak => crate::app::state::KeyboardLayout::Qwerty,
+                                crate::app::state::KeyboardLayout::Dvorak => crate::app::state::KeyboardLayout::Qwertz,
+                                crate::app::state::KeyboardLayout::Qwertz => crate::app::state::KeyboardLayout::Qwerty,
                             };
+                            // Clear any pressed key highlight so it doesn't point to an unrelated key
+                            keyboard.pressed_key = None;
                             continue 'main;
                         }
                         // Other keys do nothing here; Esc is already handled above
