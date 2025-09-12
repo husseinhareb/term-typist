@@ -7,13 +7,14 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use tui::{
     backend::Backend,
     layout::{Constraint, Direction, Layout},
-    style::{Color, Style},
+    style::Style,
     text::{Span, Spans},
     widgets::{Block, Borders, Cell, Paragraph, Row, Table, TableState, Wrap},
     Frame,
 };
 
 use crate::graph;
+use crate::theme::Theme;
 
 /// Absolute cursor into your tests (0 = newest, 1 = next older, …).
 static RECENT_CURSOR: AtomicUsize = AtomicUsize::new(0);
@@ -120,7 +121,7 @@ fn sep_f64_0(f: f64) -> String {
 
 /// Draws the Profile screen: top stats grid, 365-day summary, WPM chart,
 /// and a scrollable Recent Tests table with highlight.
-pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection) {
+pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection, theme: &Theme) {
     // 0) Determine total_tests and clamp cursor
     let total_tests: u32 = conn
         .prepare("SELECT COUNT(*) FROM tests")
@@ -295,32 +296,32 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection) {
     let left = Paragraph::new(vec![
         Spans::from(Span::styled(
             "tests started",
-            Style::default().fg(Color::Gray),
+            Style::default().fg(theme.stats_label.to_tui_color()),
         )),
-        Spans::from(Span::raw(sep_int(started as u64))),
+        Spans::from(Span::styled(sep_int(started as u64), Style::default().fg(theme.foreground.to_tui_color()))),
         Spans::from(Span::styled(
             "highest wpm",
-            Style::default().fg(Color::Gray),
+            Style::default().fg(theme.stats_label.to_tui_color()),
         )),
-        Spans::from(Span::raw(format!("{:.0}", h_wpm))),
-        Spans::from(Span::raw(format!("{} {}", h_mode, h_val))),
+        Spans::from(Span::styled(format!("{:.0}", h_wpm), Style::default().fg(theme.foreground.to_tui_color()))),
+        Spans::from(Span::styled(format!("{} {}", h_mode, h_val), Style::default().fg(theme.foreground.to_tui_color()))),
         Spans::from(Span::styled(
             "highest raw wpm",
-            Style::default().fg(Color::Gray),
+            Style::default().fg(theme.stats_label.to_tui_color()),
         )),
-        Spans::from(Span::raw(format!("{:.0}", h_raw))),
+        Spans::from(Span::styled(format!("{:.0}", h_raw), Style::default().fg(theme.foreground.to_tui_color()))),
         Spans::from(Span::styled(
             "highest accuracy",
-            Style::default().fg(Color::Gray),
+            Style::default().fg(theme.stats_label.to_tui_color()),
         )),
-        Spans::from(Span::raw(format!("{:.0}%", h_acc))),
+        Spans::from(Span::styled(format!("{:.0}%", h_acc), Style::default().fg(theme.foreground.to_tui_color()))),
         Spans::from(Span::styled(
             "highest consistency",
-            Style::default().fg(Color::Gray),
+            Style::default().fg(theme.stats_label.to_tui_color()),
         )),
-        Spans::from(Span::raw(format!("{:.0}%", h_cons))),
+        Spans::from(Span::styled(format!("{:.0}%", h_cons), Style::default().fg(theme.foreground.to_tui_color()))),
     ])
-    .block(Block::default().borders(Borders::ALL).title(" Summary "));
+    .block(Block::default().borders(Borders::ALL).title(" Summary ").border_style(Style::default().fg(theme.border.to_tui_color())).style(Style::default().bg(theme.background.to_tui_color()).fg(theme.foreground.to_tui_color())));
     f.render_widget(left, cols[0]);
 
     // Overall
@@ -333,40 +334,39 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection) {
     let mid = Paragraph::new(vec![
         Spans::from(Span::styled(
             "estimated words typed",
-            Style::default().fg(Color::Gray),
+            Style::default().fg(theme.stats_label.to_tui_color()),
         )),
-        Spans::from(Span::raw(sep_f64_0(est_words))),
+        Spans::from(Span::styled(sep_f64_0(est_words), Style::default().fg(theme.foreground.to_tui_color()))),
         Spans::from(Span::styled(
             "tests completed",
-            Style::default().fg(Color::Gray),
+            Style::default().fg(theme.stats_label.to_tui_color()),
         )),
-        Spans::from(Span::raw(format!(
-            "{} ({:.0}%)",
-            sep_int(completed as u64),
-            completion_pct
-        ))),
+        Spans::from(Span::styled(
+            format!("{} ({:.0}%)", sep_int(completed as u64), completion_pct),
+            Style::default().fg(theme.foreground.to_tui_color()),
+        )),
         Spans::from(Span::styled(
             "average wpm",
-            Style::default().fg(Color::Gray),
+            Style::default().fg(theme.stats_label.to_tui_color()),
         )),
-        Spans::from(Span::raw(format!("{:.0}", avg_wpm))),
+        Spans::from(Span::styled(format!("{:.0}", avg_wpm), Style::default().fg(theme.foreground.to_tui_color()))),
         Spans::from(Span::styled(
             "average raw wpm",
-            Style::default().fg(Color::Gray),
+            Style::default().fg(theme.stats_label.to_tui_color()),
         )),
-        Spans::from(Span::raw(format!("{:.0}", avg_raw))),
+        Spans::from(Span::styled(format!("{:.0}", avg_raw), Style::default().fg(theme.foreground.to_tui_color()))),
         Spans::from(Span::styled(
             "avg accuracy",
-            Style::default().fg(Color::Gray),
+            Style::default().fg(theme.stats_label.to_tui_color()),
         )),
-        Spans::from(Span::raw(format!("{:.0}%", avg_acc))),
+        Spans::from(Span::styled(format!("{:.0}%", avg_acc), Style::default().fg(theme.foreground.to_tui_color()))),
         Spans::from(Span::styled(
             "avg consistency",
-            Style::default().fg(Color::Gray),
+            Style::default().fg(theme.stats_label.to_tui_color()),
         )),
-        Spans::from(Span::raw(format!("{:.0}%", avg_cons))),
+        Spans::from(Span::styled(format!("{:.0}%", avg_cons), Style::default().fg(theme.foreground.to_tui_color()))),
     ])
-    .block(Block::default().borders(Borders::ALL).title(" Overall "));
+    .block(Block::default().borders(Borders::ALL).title(" Overall ").border_style(Style::default().fg(theme.border.to_tui_color())).style(Style::default().bg(theme.background.to_tui_color()).fg(theme.foreground.to_tui_color())));
     f.render_widget(mid, cols[1]);
 
     // Recent (last-10 averages)
@@ -376,31 +376,31 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection) {
     let right = Paragraph::new(vec![
         Spans::from(Span::styled(
             "time typing",
-            Style::default().fg(Color::Gray),
+            Style::default().fg(theme.stats_label.to_tui_color()),
         )),
-        Spans::from(Span::raw(format!("{:02}:{:02}:{:02}", hrs, mins, secs))),
+        Spans::from(Span::styled(format!("{:02}:{:02}:{:02}", hrs, mins, secs), Style::default().fg(theme.foreground.to_tui_color()))),
         Spans::from(Span::styled(
             "avg wpm (last 10)",
-            Style::default().fg(Color::Gray),
+            Style::default().fg(theme.stats_label.to_tui_color()),
         )),
-        Spans::from(Span::raw(format!("{:.0}", avg10_wpm))),
+        Spans::from(Span::styled(format!("{:.0}", avg10_wpm), Style::default().fg(theme.foreground.to_tui_color()))),
         Spans::from(Span::styled(
             "avg raw wpm (last 10)",
-            Style::default().fg(Color::Gray),
+            Style::default().fg(theme.stats_label.to_tui_color()),
         )),
-        Spans::from(Span::raw(format!("{:.0}", avg10_raw))),
+        Spans::from(Span::styled(format!("{:.0}", avg10_raw), Style::default().fg(theme.foreground.to_tui_color()))),
         Spans::from(Span::styled(
             "avg accuracy (last 10)",
-            Style::default().fg(Color::Gray),
+            Style::default().fg(theme.stats_label.to_tui_color()),
         )),
-        Spans::from(Span::raw(format!("{:.0}%", avg10_acc))),
+        Spans::from(Span::styled(format!("{:.0}%", avg10_acc), Style::default().fg(theme.foreground.to_tui_color()))),
         Spans::from(Span::styled(
             "avg consistency (last 10)",
-            Style::default().fg(Color::Gray),
+            Style::default().fg(theme.stats_label.to_tui_color()),
         )),
-        Spans::from(Span::raw(format!("{:.0}%", avg10_cons))),
+        Spans::from(Span::styled(format!("{:.0}%", avg10_cons), Style::default().fg(theme.foreground.to_tui_color()))),
     ])
-    .block(Block::default().borders(Borders::ALL).title(" Recent "));
+    .block(Block::default().borders(Borders::ALL).title(" Recent ").border_style(Style::default().fg(theme.border.to_tui_color())).style(Style::default().bg(theme.background.to_tui_color()).fg(theme.foreground.to_tui_color())));
     f.render_widget(right, cols[2]);
 
     // Last 365 Days summary — use datetime window (no midnight snap)
@@ -419,19 +419,19 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection) {
         .query_row([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))
         .unwrap_or((0, 0, 0.0, 0.0));
     let summary = Paragraph::new(vec![Spans::from(vec![
-        Span::styled("Total: ", Style::default().fg(Color::Gray)),
-        Span::raw(sep_int(total as u64)),
+        Span::styled("Total: ", Style::default().fg(theme.stats_label.to_tui_color())),
+        Span::styled(sep_int(total as u64), Style::default().fg(theme.foreground.to_tui_color())),
         Span::raw("   "),
-        Span::styled("Done:  ", Style::default().fg(Color::Gray)),
-        Span::raw(sep_int(done as u64)),
+        Span::styled("Done:  ", Style::default().fg(theme.stats_label.to_tui_color())),
+        Span::styled(sep_int(done as u64), Style::default().fg(theme.foreground.to_tui_color())),
         Span::raw("   "),
-        Span::styled("WPM:   ", Style::default().fg(Color::Gray)),
-        Span::raw(format!("{:.1}", avg_year_wpm)),
+        Span::styled("WPM:   ", Style::default().fg(theme.stats_label.to_tui_color())),
+        Span::styled(format!("{:.1}", avg_year_wpm), Style::default().fg(theme.foreground.to_tui_color())),
         Span::raw("   "),
-        Span::styled("Acc:   ", Style::default().fg(Color::Gray)),
-        Span::raw(format!("{:.1}%", avg_year_acc)),
+        Span::styled("Acc:   ", Style::default().fg(theme.stats_label.to_tui_color())),
+        Span::styled(format!("{:.1}%", avg_year_acc), Style::default().fg(theme.foreground.to_tui_color())),
     ])])
-    .block(Block::default().borders(Borders::ALL).title(" Last 365 Days "))
+    .block(Block::default().borders(Borders::ALL).title(" Last 365 Days ").border_style(Style::default().fg(theme.border.to_tui_color())).style(Style::default().bg(theme.background.to_tui_color()).fg(theme.foreground.to_tui_color())))
     .wrap(Wrap { trim: true });
     f.render_widget(summary, chunks[1]);
 
@@ -457,7 +457,7 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection) {
         .unwrap()
         .filter_map(Result::ok)
         .collect();
-    graph::draw_wpm_chart(f, bottom[0], &data);
+    graph::draw_wpm_chart(f, bottom[0], &data, theme);
 
     // Scrollable Recent Tests table
         let sql = format!(
@@ -540,7 +540,7 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection) {
                 "Consistency",
                 "Mode",
             ])
-            .style(Style::default().fg(Color::Yellow)),
+            .style(Style::default().fg(theme.stats_value.to_tui_color())),
         )
         .block(
             Block::default()
@@ -556,7 +556,7 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection) {
             Constraint::Length(12),
         ])
         .column_spacing(1)
-        .highlight_style(Style::default().bg(Color::Blue))
+    .highlight_style(Style::default().bg(theme.info.to_tui_color()))
         .highlight_symbol(" ");
 
     // IMPORTANT: render as stateful to activate highlight behavior

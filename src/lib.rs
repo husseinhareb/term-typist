@@ -76,8 +76,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         terminal.draw(|f| {
             match app.mode {
                 Mode::Profile => {
-                    // draw_profile expects (&mut Frame, &Connection)
-                    draw_profile(f, &conn);
+                    // draw_profile now accepts (&mut Frame, &Connection, &Theme)
+                    draw_profile(f, &conn, &app.theme);
                 }
                 Mode::Settings => {
                     // draw_settings should render your settings UI

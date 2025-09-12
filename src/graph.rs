@@ -5,14 +5,15 @@ use tui::{
     backend::Backend,
     layout::Rect,
     symbols,
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::Span,
     widgets::{Axis, Block, Borders, Chart, Dataset, GraphType},
     Frame,
 };
+use crate::theme::Theme;
 
 /// Draws a WPM over time chart with styled axes, labels, and smooth line.
-pub fn draw_wpm_chart<B: Backend>(f: &mut Frame<B>, area: Rect, data: &[(u64, f64)]) {
+pub fn draw_wpm_chart<B: Backend>(f: &mut Frame<B>, area: Rect, data: &[(u64, f64)], theme: &Theme) {
     // Convert data points to f64
     let pts: Vec<(f64, f64)> = data.iter().map(|&(t, w)| (t as f64, w)).collect();
     let max_t = data.last().map(|&(t, _)| t as f64).unwrap_or(1.0).max(1.0);
@@ -23,7 +24,7 @@ pub fn draw_wpm_chart<B: Backend>(f: &mut Frame<B>, area: Rect, data: &[(u64, f6
         .name("WPM")
         .marker(symbols::Marker::Braille)
         .graph_type(GraphType::Line)
-        .style(Style::default().fg(Color::Cyan))
+        .style(Style::default().fg(theme.chart_line.to_tui_color()))
         .data(&pts);
 
     // Generate axis labels at min, mid, max
@@ -48,21 +49,21 @@ pub fn draw_wpm_chart<B: Backend>(f: &mut Frame<B>, area: Rect, data: &[(u64, f6
     let chart = Chart::new(vec![dataset])
         .block(
             Block::default().
-                title(Span::styled("WPM Over Time", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))).
+                title(Span::styled("WPM Over Time", Style::default().fg(theme.stats_value.to_tui_color()).add_modifier(Modifier::BOLD))).
                 borders(Borders::ALL).
-                border_style(Style::default().fg(Color::Gray)),
+                border_style(Style::default().fg(theme.border.to_tui_color())),
         )
         .x_axis(
             Axis::default()
-                .title(Span::styled("Seconds", Style::default().fg(Color::Gray)))
-                .style(Style::default().fg(Color::Gray))
+                .title(Span::styled("Seconds", Style::default().fg(theme.chart_labels.to_tui_color())))
+                .style(Style::default().fg(theme.chart_axis.to_tui_color()))
                 .bounds([0.0, max_t])
                 .labels(x_labels),
         )
         .y_axis(
             Axis::default()
-                .title(Span::styled("WPM", Style::default().fg(Color::Gray)))
-                .style(Style::default().fg(Color::Gray))
+                .title(Span::styled("WPM", Style::default().fg(theme.chart_labels.to_tui_color())))
+                .style(Style::default().fg(theme.chart_axis.to_tui_color()))
                 .bounds([0.0, max_w])
                 .labels(y_labels),
         );

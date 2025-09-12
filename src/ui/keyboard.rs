@@ -3,7 +3,7 @@ use crossterm::event::KeyCode;
 use tui::{
     backend::Backend,
     layout::{Constraint, Direction, Layout, Rect, Alignment},
-    style::{Color, Style},
+    style::{Style},
     text::Span,
     widgets::{Block, Borders, Paragraph},
     Frame,

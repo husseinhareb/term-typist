@@ -1,7 +1,7 @@
 use tui::{
     backend::Backend,
     layout::{ Constraint, Direction, Layout },
-    style::{ Color, Modifier, Style },
+    style::{ Modifier, Style },
     text::{ Span, Spans },
     widgets::{ Block, Borders, Paragraph, Tabs, Wrap },
     Frame,
@@ -77,8 +77,10 @@ pub fn draw<B: Backend>(
 
             let tabs = Tabs::new(titles)
                 .block(
-                    Block::default()
-                        .borders(Borders::ALL)
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(app.theme.border.to_tui_color()))
+                .style(Style::default().bg(app.theme.background.to_tui_color()).fg(app.theme.foreground.to_tui_color()))
                         .title(
                             Spans::from(
                                 vec![
@@ -118,6 +120,8 @@ pub fn draw<B: Backend>(
             let opts = Paragraph::new(Spans::from(spans)).block(
                 Block::default()
                     .borders(Borders::ALL)
+                    .border_style(Style::default().fg(app.theme.border.to_tui_color()))
+                    .style(Style::default().bg(app.theme.background.to_tui_color()).fg(app.theme.foreground.to_tui_color()))
                     .title(
                         Spans::from(
                             vec![
@@ -171,6 +175,8 @@ pub fn draw<B: Backend>(
             let state = Paragraph::new(state_txt).block(
                 Block::default()
                     .borders(Borders::ALL)
+                    .border_style(Style::default().fg(app.theme.border.to_tui_color()))
+                    .style(Style::default().bg(app.theme.background.to_tui_color()).fg(app.theme.foreground.to_tui_color()))
                     .title(
                         Spans::from(
                             vec![
@@ -194,6 +200,8 @@ pub fn draw<B: Backend>(
             let speed = Paragraph::new(speed_txt).block(
                 Block::default()
                     .borders(Borders::ALL)
+                    .border_style(Style::default().fg(app.theme.border.to_tui_color()))
+                    .style(Style::default().bg(app.theme.background.to_tui_color()).fg(app.theme.foreground.to_tui_color()))
                     .title(
                         Spans::from(
                             vec![
@@ -249,7 +257,9 @@ pub fn draw<B: Backend>(
             };
             let timer = Paragraph::new(timer_txt).block(
                 Block::default()
-                    .borders(Borders::ALL)
+                            .borders(Borders::ALL)
+                            .border_style(Style::default().fg(app.theme.border.to_tui_color()))
+                            .style(Style::default().bg(app.theme.background.to_tui_color()).fg(app.theme.foreground.to_tui_color()))
                     .title(
                         Spans::from(
                             vec![
@@ -296,7 +306,9 @@ pub fn draw<B: Backend>(
                 Paragraph::new(Spans::from(free))
                     .block(
                         Block::default()
-                            .borders(Borders::ALL)
+                                    .borders(Borders::ALL)
+                                    .border_style(Style::default().fg(app.theme.border.to_tui_color()))
+                                    .style(Style::default().bg(app.theme.background.to_tui_color()).fg(app.theme.foreground.to_tui_color()))
                             .title(
                                 Spans::from(
                                     vec![
@@ -366,6 +378,8 @@ pub fn draw<B: Backend>(
         // 1) Build the Block
         let block = Block::default()
             .borders(Borders::ALL)
+            .border_style(Style::default().fg(app.theme.border.to_tui_color()))
+            .style(Style::default().bg(app.theme.background.to_tui_color()).fg(app.theme.foreground.to_tui_color()))
             .title(
                 Spans::from(
                     vec![
@@ -393,7 +407,7 @@ pub fn draw_finished<B: Backend>(f: &mut Frame<B>, app: &App) {
         .split(size);
 
     // Left: WPM chart
-    graph::draw_wpm_chart(f, chunks[0], &app.samples);
+    graph::draw_wpm_chart(f, chunks[0], &app.samples, &app.theme);
 
     // Right: stats
     let elapsed_secs = app.elapsed_secs();
@@ -480,7 +494,13 @@ pub fn draw_finished<B: Backend>(f: &mut Frame<B>, app: &App) {
     ];
 
     let stats = Paragraph::new(items)
-        .block(Block::default().borders(Borders::ALL).title("Summary"))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(app.theme.border.to_tui_color()))
+                .style(Style::default().bg(app.theme.background.to_tui_color()).fg(app.theme.foreground.to_tui_color()))
+                .title("Summary")
+        )
         .wrap(Wrap { trim: true });
 
     f.render_widget(stats, chunks[1]);
