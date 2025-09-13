@@ -71,12 +71,40 @@ impl Keyboard {
         };
         // Use the entire available area for the keyboard and distribute it
         // evenly between the rows so the keys occupy the full pane height.
+        // Compute explicit integer heights for each row to avoid uneven
+        // rounding that can leave a larger gap between certain rows.
         let keyboard_area = area;
-        let row_count = rows.len() as u32;
-        let row_areas = Layout::default()
+        let total_h = keyboard_area.height as usize;
+        let row_count = rows.len();
+        // Compute uniform row height and center the rows vertically when
+        // the height doesn't divide evenly. This avoids some rows being
+        // one pixel taller than others and creates a consistent look.
+        let row_h = if row_count > 0 { total_h / row_count } else { total_h };
+        let row_h = if row_h == 0 { 1 } else { row_h };
+        let used = row_h * row_count;
+        let extra = if total_h > used { total_h - used } else { 0 };
+        let pad_top = extra / 2;
+        let pad_bottom = extra - pad_top;
+
+        let mut cons: Vec<Constraint> = Vec::new();
+        if pad_top > 0 {
+            cons.push(Constraint::Length(pad_top as u16));
+        }
+        for _ in 0..row_count {
+            cons.push(Constraint::Length(row_h as u16));
+        }
+        if pad_bottom > 0 {
+            cons.push(Constraint::Length(pad_bottom as u16));
+        }
+
+        let split_areas = Layout::default()
             .direction(Direction::Vertical)
-            .constraints(vec![Constraint::Ratio(1, row_count); rows.len()])
+            .constraints(cons)
             .split(keyboard_area);
+
+        // Extract only the row areas (skip the top padding if present)
+        let start_idx = if pad_top > 0 { 1 } else { 0 };
+        let row_areas: Vec<tui::layout::Rect> = split_areas[start_idx..start_idx + row_count].to_vec();
 
     for (r, &row) in rows.iter().enumerate() {
             let row_area = row_areas[r];

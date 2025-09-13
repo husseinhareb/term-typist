@@ -23,8 +23,9 @@ pub fn draw_settings<B: Backend>(f: &mut Frame<B>, app: &App, _keyboard: &Keyboa
 
     // Title
     let title = Paragraph::new("⚙ Settings")
-        .block(Block::default().borders(Borders::ALL))
-        .alignment(tui::layout::Alignment::Center);
+        .block(Block::default().borders(Borders::ALL).title(Span::styled("⚙ Settings", Style::default().fg(app.theme.title_accent.to_tui_color()).add_modifier(Modifier::BOLD))))
+        .alignment(tui::layout::Alignment::Center)
+        .style(Style::default().fg(app.theme.title.to_tui_color()));
     f.render_widget(title, outer[0]);
 
     // Two-column layout for settings: toggles left, switches right
@@ -87,6 +88,7 @@ pub fn draw_settings<B: Backend>(f: &mut Frame<B>, app: &App, _keyboard: &Keyboa
             .title(Span::styled("Toggles", Style::default().fg(app.theme.title_accent.to_tui_color()).add_modifier(Modifier::BOLD)))
             .border_style(Style::default().fg(app.theme.border.to_tui_color()))
         )
+    .style(Style::default().fg(app.theme.foreground.to_tui_color()))
         .wrap(Wrap { trim: true });
 
     f.render_widget(left_para, cols[0]);
@@ -95,7 +97,10 @@ pub fn draw_settings<B: Backend>(f: &mut Frame<B>, app: &App, _keyboard: &Keyboa
     let switches = audio::list_switches();
     let mut switch_items: Vec<ListItem> = switches
         .iter()
-        .map(|s| ListItem::new(s.clone()))
+        .map(|s| {
+            // style each item with the theme's label color; the active one will be highlighted by the list
+            ListItem::new(Span::styled(s.clone(), Style::default().fg(app.theme.stats_label.to_tui_color())))
+        })
         .collect();
 
     if switch_items.is_empty() {
@@ -104,14 +109,15 @@ pub fn draw_settings<B: Backend>(f: &mut Frame<B>, app: &App, _keyboard: &Keyboa
 
     // Mark current switch with a subtle marker
     let switch_list = List::new(switch_items)
-        .block(Block::default().borders(Borders::ALL).title("Keyboard switches (press 'k' to cycle)"))
-        .highlight_style(Style::default().fg(Color::LightCyan).add_modifier(Modifier::BOLD))
+        .block(Block::default().borders(Borders::ALL).title(Span::styled("Keyboard switches (press 'k' to cycle)", Style::default().fg(app.theme.title_accent.to_tui_color()).add_modifier(Modifier::BOLD))).border_style(Style::default().fg(app.theme.border.to_tui_color())))
+        .highlight_style(Style::default().fg(app.theme.stats_value.to_tui_color()).add_modifier(Modifier::BOLD))
         .highlight_symbol("● ");
     f.render_widget(switch_list, cols[1]);
 
     // Footer/help at bottom of right column
     let help = Paragraph::new("Keys: l = cycle layout, k = cycle switch, a = toggle audio, Esc = back")
-        .block(Block::default().borders(Borders::TOP))
+        .block(Block::default().borders(Borders::TOP).border_style(Style::default().fg(app.theme.border.to_tui_color())))
+    .style(Style::default().fg(app.theme.info.to_tui_color()))
         .wrap(Wrap { trim: true });
     // render help with a small margin inside the right column
     f.render_widget(help, cols[1].inner(&Margin { vertical: 1, horizontal: 1 }));
