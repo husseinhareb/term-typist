@@ -146,15 +146,17 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 // ── Global navigation (tabs & values)
                 handle_nav(&mut app, code);
 
-                // ── 'p' opens Profile (from View)
-                if code == KeyCode::Char('p') && app.mode == Mode::View {
-                    app.mode = Mode::Profile;
-                    continue 'main;
-                }
-                // ── 's' opens Settings (from View)
-                if code == KeyCode::Char('s') && app.mode == Mode::View {
-                    app.mode = Mode::Settings;
-                    continue 'main;
+                // ── 'p' opens Profile, 's' opens Settings (accept upper/lower case)
+                if let KeyCode::Char(c) = code {
+                    let lc = c.to_ascii_lowercase();
+                    if lc == 'p' && app.mode == Mode::View {
+                        app.mode = Mode::Profile;
+                        continue 'main;
+                    }
+                    if lc == 's' && app.mode == Mode::View {
+                        app.mode = Mode::Settings;
+                        continue 'main;
+                    }
                 }
 
                 // ── Mode-specific input
