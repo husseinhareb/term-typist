@@ -201,6 +201,65 @@ pub fn read_keyboard_switch() -> io::Result<Option<String>> {
     Ok(None)
 }
 
+/// Write audio enabled flag: audio_enabled 0|1
+pub fn write_audio_enabled(enabled: bool) -> io::Result<()> {
+    let file_path = config_file()?;
+    let mut file_content = String::new();
+
+    if file_path.exists() {
+        let mut file = File::open(&file_path)?;
+        file.read_to_string(&mut file_content)?;
+    }
+
+    let mut updated_content = String::new();
+    let mut found = false;
+
+    for line in file_content.lines() {
+        if line.trim().starts_with("audio_enabled") {
+            found = true;
+            updated_content.push_str(&format!("audio_enabled {}\n", if enabled { 1 } else { 0 }));
+        } else {
+            updated_content.push_str(line);
+            updated_content.push('\n');
+        }
+    }
+
+    if !found {
+        updated_content.push_str(&format!("audio_enabled {}\n", if enabled { 1 } else { 0 }));
+    }
+
+    if let Some(parent) = file_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    let mut file = File::create(&file_path)?;
+    file.write_all(updated_content.as_bytes())?;
+    Ok(())
+}
+
+/// Read audio_enabled from config. Returns Ok(Some(true/false)) if found.
+pub fn read_audio_enabled() -> io::Result<Option<bool>> {
+    let file_path = config_file()?;
+    if !file_path.exists() {
+        return Ok(None);
+    }
+    let file = File::open(&file_path)?;
+    let reader = BufReader::new(file);
+
+    for line in reader.lines() {
+        let line = line?;
+        if line.trim().starts_with("audio_enabled") {
+            let val = line
+                .split_whitespace()
+                .skip(1)
+                .next()
+                .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Invalid audio_enabled"))?;
+            return Ok(Some(val != "0"));
+        }
+    }
+    Ok(None)
+}
+
 // Function to get the path of the config file
 fn config_file() -> Result<PathBuf, io::Error> {
     let config_dir = match dirs::config_dir() {

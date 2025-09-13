@@ -166,12 +166,26 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                             app.start = Some(now);
                             app.last_input = now;
                             app.locked = false;
+                            if app.audio_enabled {
+                                crate::audio::play_for(&app.keyboard_switch, "ENTER");
+                            }
                         }
                     }
 
                     Mode::Insert => {
                         match code {
-                            KeyCode::Char(c)    => app.on_key(c),
+                            KeyCode::Char(' ') => {
+                                if app.audio_enabled {
+                                    crate::audio::play_for(&app.keyboard_switch, "SPACE");
+                                }
+                                app.on_key(' ');
+                            }
+                            KeyCode::Char(c) if !c.is_control() => {
+                                if app.audio_enabled {
+                                    crate::audio::play_for(&app.keyboard_switch, "GENERIC");
+                                }
+                                app.on_key(c)
+                            }
                             KeyCode::Backspace  => app.backspace(),
                             _                   => {}
                         }
@@ -266,6 +280,12 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                                 // clear pressed highlight
                                 keyboard.pressed_key = None;
                             }
+                            continue 'main;
+                        }
+                        // Toggle audio on/off with 'a'
+                        if code == KeyCode::Char('a') {
+                            app.audio_enabled = !app.audio_enabled;
+                            let _ = crate::app::config::write_audio_enabled(app.audio_enabled);
                             continue 'main;
                         }
                         // Other keys do nothing here; Esc is already handled above

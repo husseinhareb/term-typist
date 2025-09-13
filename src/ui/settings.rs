@@ -74,6 +74,10 @@ pub fn draw_settings<B: Backend>(f: &mut Frame<B>, app: &App, _keyboard: &Keyboa
             "Keyboard switch: {} (press 'k' to cycle)",
             app.keyboard_switch
         )),
+        ListItem::new(format!(
+            "[{}] Audio enabled (press 'a' to toggle)",
+            if app.audio_enabled { 'x' } else { ' ' }
+        )),
     ];
 
     // Wrap them in a List widget

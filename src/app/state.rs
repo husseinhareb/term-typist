@@ -55,6 +55,7 @@ pub struct App {
     pub show_keyboard: bool,
     pub keyboard_layout: KeyboardLayout,
     pub keyboard_switch: String,
+    pub audio_enabled: bool,
     pub theme: Theme,
 }
 
@@ -83,6 +84,12 @@ impl App {
             }
         };
 
+        // Read persisted audio setting (default true)
+        let audio_enabled = match crate::app::config::read_audio_enabled() {
+            Ok(Some(b)) => b,
+            _ => true,
+        };
+
         App {
             target: target.clone(),
             status: vec![Status::Untyped; target.chars().count()],
@@ -107,15 +114,15 @@ impl App {
             show_keyboard: true,
             keyboard_layout: kb_layout,
             keyboard_switch: kb_switch,
+            audio_enabled,
             theme: Theme::load(),
         }
     }
 
     /// Handle a typed character, updating status, counts, and locking logic.
     pub fn on_key(&mut self, key: char) {
-    self.last_input = Instant::now();
-    // Play typing click for accepted characters (non-blocking) using selected switch
-    crate::audio::play_for(&self.keyboard_switch, "GENERIC");
+        self.last_input = Instant::now();
+        // audio handled by caller (lib.rs) to play per-KeyCode samples
         // Free-text (zen) mode
         if self.selected_tab == 2 {
             self.free_text.push(key);
@@ -156,6 +163,9 @@ impl App {
     /// Handle backspace: undo last typed char status or free-text.
     pub fn backspace(&mut self) {
         self.last_input = Instant::now();
+        if self.audio_enabled {
+            crate::audio::play_for(&self.keyboard_switch, "BACKSPACE");
+        }
         if self.selected_tab == 2 {
             if self.free_text.pop().is_some() && self.correct_chars > 0 {
                 self.correct_chars -= 1;
