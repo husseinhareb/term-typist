@@ -11,6 +11,7 @@ use tui::{
 use crate::app::state::App;
 use crate::ui::keyboard::Keyboard;
 use crate::audio;
+use crate::themes_presets;
 
 /// Draws the Settings screen, listing each boolean toggle.
 pub fn draw_settings<B: Backend>(f: &mut Frame<B>, app: &App, _keyboard: &Keyboard) {
@@ -71,6 +72,25 @@ pub fn draw_settings<B: Backend>(f: &mut Frame<B>, app: &App, _keyboard: &Keyboa
     lines.push(Spans::from(vec![Span::raw(layout_label.to_string())]));
     lines.push(Spans::from(vec![Span::raw(format!("Keyboard switch: {}", app.keyboard_switch))]));
 
+    // Theme preset display
+    let theme_names = themes_presets::preset_names();
+    let mut theme_lines: Vec<Spans> = Vec::new();
+    theme_lines.push(Spans::from(Span::raw("Theme presets:")));
+    for name in theme_names.iter() {
+        if let Some(picked) = crate::themes_presets::theme_by_name(name) {
+            // compare by converting to_tui_color of title as a cheap uniqueness test
+            let selected = app.theme.title.to_tui_color() == picked.title.to_tui_color();
+            let marker = if selected { "→ " } else { "  " };
+            theme_lines.push(Spans::from(Span::raw(format!("{}{}", marker, name))));
+        } else {
+            theme_lines.push(Spans::from(Span::raw(format!("  {}", name))));
+        }
+    }
+    // Render theme presets below other left column lines
+    for tl in theme_lines.into_iter() {
+        lines.push(tl);
+    }
+
     // audio toggle (right-aligned like other toggles)
     let audio_label = "Audio enabled (press 'a' to toggle)";
     let audio_status = if app.audio_enabled { "[x]" } else { "[ ]" };
@@ -121,4 +141,10 @@ pub fn draw_settings<B: Backend>(f: &mut Frame<B>, app: &App, _keyboard: &Keyboa
         .wrap(Wrap { trim: true });
     // render help with a small margin inside the right column
     f.render_widget(help, cols[1].inner(&Margin { vertical: 1, horizontal: 1 }));
+
+    // Hint: theme cycling
+    let theme_hint = Paragraph::new("When in Settings: press 't' to cycle themes instantly")
+        .block(Block::default().borders(Borders::NONE))
+        .style(Style::default().fg(app.theme.info.to_tui_color()));
+    f.render_widget(theme_hint, cols[0].inner(&Margin { vertical: 1, horizontal: 1 }));
 }

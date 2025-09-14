@@ -15,6 +15,7 @@ mod wpm;       // src/wpm.rs
 mod generator; // src/generator.rs
 mod db;        // src/db.rs
 mod theme;     // src/theme.rs
+pub mod themes_presets; // src/themes_presets.rs (predefined themes)
 mod audio;     // src/audio.rs
 
 use app::state::{ App, Mode, Status };
@@ -267,6 +268,28 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                                 crate::app::state::KeyboardLayout::Dvorak => "dvorak",
                                 crate::app::state::KeyboardLayout::Qwertz => "qwertz",
                             });
+                            continue 'main;
+                        }
+                        // Cycle themes with 't' and apply immediately
+                        if code == KeyCode::Char('t') {
+                            // get preset names
+                            let presets = crate::themes_presets::preset_names();
+                            if !presets.is_empty() {
+                                // find index of current theme by matching title color
+                                let mut idx = 0usize;
+                                for (i, name) in presets.iter().enumerate() {
+                                    if let Some(p) = crate::themes_presets::theme_by_name(name) {
+                                        if p.title.to_tui_color() == app.theme.title.to_tui_color() {
+                                            idx = i;
+                                            break;
+                                        }
+                                    }
+                                }
+                                idx = (idx + 1) % presets.len();
+                                if let Some(next) = crate::themes_presets::theme_by_name(presets[idx]) {
+                                    app.theme = next;
+                                }
+                            }
                             continue 'main;
                         }
                         // Cycle available keyboard switch samples with 'k'
