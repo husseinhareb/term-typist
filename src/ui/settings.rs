@@ -4,7 +4,7 @@ use tui::{
     backend::Backend,
     layout::{Constraint, Direction, Layout, Margin},
     style::{Modifier, Style},
-    widgets::{Block, Borders, List, ListItem, Paragraph, Wrap, ListState},
+    widgets::{Block, Borders, Paragraph, Wrap, Table, Row, Cell, TableState},
     Frame,
     text::{Span, Spans, Text},
 };
@@ -83,35 +83,35 @@ pub fn draw_settings<B: Backend>(f: &mut Frame<B>, app: &App, _keyboard: &Keyboa
     offset = cmp::min(offset, max_offset);
     let selected_idx = cursor.saturating_sub(offset);
 
-    // Build visible ListItems for the current page
+    // Build visible table rows for the current page so we can highlight the
+    // entire row width (Table highlight fills the row background) rather
+    // than only the text span.
     let end = cmp::min(offset + avail, total);
-    // Build visible items but style the selected row with REVERSED to highlight it
-    let mut visible_items: Vec<ListItem> = Vec::with_capacity(end - offset);
-    for (i, s) in lines[offset..end].iter().enumerate() {
-        if i == selected_idx {
-            visible_items.push(
-                ListItem::new(s.clone()).style(
-                    Style::default()
-                        .bg(app.theme.highlight.to_tui_color())
-                        .fg(app.theme.background.to_tui_color())
-                        .add_modifier(Modifier::REVERSED)
-                )
-            );
-        } else {
-            visible_items.push(ListItem::new(s.clone()).style(Style::default().fg(app.theme.foreground.to_tui_color())));
-        }
+    let mut rows: Vec<Row> = Vec::with_capacity(end - offset);
+    for s in lines[offset..end].iter() {
+        rows.push(Row::new(vec![Cell::from(s.clone())]));
     }
 
-    // Render as a normal list (no arrow); selection is shown via reversed style on the item
-    let mut state = ListState::default();
+    // Use a stateful Table so the highlight_style covers the full row area.
+    let mut state = TableState::default();
     state.select(Some(selected_idx));
-    let list = List::new(visible_items)
+
+    let table = Table::new(rows)
         .block(
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(app.theme.border.to_tui_color()))
                 .style(Style::default().bg(app.theme.background.to_tui_color()).fg(app.theme.foreground.to_tui_color()))
                 .title(Span::styled("Settings", Style::default().fg(app.theme.title.to_tui_color())))
-        );
-    f.render_stateful_widget(list, outer[1], &mut state);
+        )
+        .widths(&[Constraint::Percentage(100)])
+        .column_spacing(0)
+        .highlight_style(
+            Style::default()
+                .bg(app.theme.highlight.to_tui_color())
+                .fg(app.theme.background.to_tui_color()),
+        )
+        .highlight_symbol(" ");
+
+    f.render_stateful_widget(table, outer[1], &mut state);
 }
