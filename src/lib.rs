@@ -19,6 +19,7 @@ pub mod themes_presets; // src/themes_presets.rs (predefined themes)
 mod audio;     // src/audio.rs
 
 use app::state::{ App, Mode, Status };
+use std::cmp;
 use app::input::handle_nav;
 use ui::draw::{ draw, draw_finished };
 use ui::keyboard::Keyboard;
@@ -251,6 +252,79 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     }
 
                     Mode::Settings => {
+                        use std::num::NonZeroUsize;
+                        // Navigation keys for settings: mirror profile's behavior but operate on app.settings_cursor
+                        match code {
+                            KeyCode::Up | KeyCode::Char('k') => {
+                                // decrement if possible (like fetch_update with checked_sub)
+                                if app.settings_cursor > 0 { app.settings_cursor = app.settings_cursor.saturating_sub(1); }
+                                continue 'main;
+                            }
+                            KeyCode::Down | KeyCode::Char('j') => {
+                                app.settings_cursor = app.settings_cursor.saturating_add(1);
+                                continue 'main;
+                            }
+                            KeyCode::PageUp => {
+                                app.settings_cursor = app.settings_cursor.saturating_sub(10);
+                                continue 'main;
+                            }
+                            KeyCode::PageDown => {
+                                app.settings_cursor = app.settings_cursor.saturating_add(10);
+                                continue 'main;
+                            }
+                            KeyCode::Home => { app.settings_cursor = 0; continue 'main; }
+                            KeyCode::End => { app.settings_cursor = usize::MAX / 2; continue 'main; }
+                            _ => {}
+                        }
+
+                        // Allow changing the currently selected setting with Left/Right
+                        if code == KeyCode::Left || code == KeyCode::Right {
+                            let left = code == KeyCode::Left;
+                            // number of settings rows (must match draw_settings ordering)
+                            let total = 10usize;
+                            let sel = if total > 0 { cmp::min(app.settings_cursor, total - 1) } else { 0 };
+                            match sel {
+                                0 => { app.show_mode = !app.show_mode; }
+                                1 => { app.show_value = !app.show_value; }
+                                2 => { app.show_state = !app.show_state; }
+                                3 => { app.show_speed = !app.show_speed; }
+                                4 => { app.show_timer = !app.show_timer; }
+                                5 => { app.show_text = !app.show_text; }
+                                6 => { app.show_keyboard = !app.show_keyboard; }
+                                7 => {
+                                    app.keyboard_layout = match app.keyboard_layout {
+                                        crate::app::state::KeyboardLayout::Qwerty => if left { crate::app::state::KeyboardLayout::Qwertz } else { crate::app::state::KeyboardLayout::Azerty },
+                                        crate::app::state::KeyboardLayout::Azerty => if left { crate::app::state::KeyboardLayout::Qwerty } else { crate::app::state::KeyboardLayout::Dvorak },
+                                        crate::app::state::KeyboardLayout::Dvorak => if left { crate::app::state::KeyboardLayout::Azerty } else { crate::app::state::KeyboardLayout::Qwertz },
+                                        crate::app::state::KeyboardLayout::Qwertz => if left { crate::app::state::KeyboardLayout::Dvorak } else { crate::app::state::KeyboardLayout::Qwerty },
+                                    };
+                                    let _ = crate::app::config::write_keyboard_layout(match app.keyboard_layout {
+                                        crate::app::state::KeyboardLayout::Qwerty => "qwerty",
+                                        crate::app::state::KeyboardLayout::Azerty => "azerty",
+                                        crate::app::state::KeyboardLayout::Dvorak => "dvorak",
+                                        crate::app::state::KeyboardLayout::Qwertz => "qwertz",
+                                    });
+                                }
+                                8 => {
+                                    let presets = crate::themes_presets::preset_names();
+                                    if !presets.is_empty() {
+                                        // find current index
+                                        let mut idx = 0usize;
+                                        for (i, &n) in presets.iter().enumerate() {
+                                            if let Some(p) = crate::themes_presets::theme_by_name(n) {
+                                                if p.title.to_tui_color() == app.theme.title.to_tui_color() { idx = i; break; }
+                                            }
+                                        }
+                                        if left { idx = (idx + presets.len() - 1) % presets.len(); } else { idx = (idx + 1) % presets.len(); }
+                                        if let Some(next) = crate::themes_presets::theme_by_name(presets[idx]) { app.theme = next; let _ = app.theme.save_to_config(); }
+                                    }
+                                }
+                                9 => { app.audio_enabled = !app.audio_enabled; let _ = crate::app::config::write_audio_enabled(app.audio_enabled); }
+                                _ => {}
+                            }
+                            continue 'main;
+                        }
+
                         // Allow cycling keyboard layout with 'l'
                         if code == KeyCode::Char('l') {
                             app.keyboard_layout = match app.keyboard_layout {
@@ -270,6 +344,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                             });
                             continue 'main;
                         }
+
                         // Cycle themes with 't' and apply immediately
                         if code == KeyCode::Char('t') {
                             // get preset names
@@ -292,8 +367,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                             }
                             continue 'main;
                         }
+
                         // Cycle available keyboard switch samples with 'k'
-                        if code == KeyCode::Char('k') {
+                        if code == KeyCode::Char('K') || code == KeyCode::Char('K') {
                             let list = crate::audio::list_switches();
                             if !list.is_empty() {
                                 // find current index
@@ -307,6 +383,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                             }
                             continue 'main;
                         }
+
                         // Toggle audio on/off with 'a'
                         if code == KeyCode::Char('a') {
                             app.audio_enabled = !app.audio_enabled;

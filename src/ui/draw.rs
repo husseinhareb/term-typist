@@ -356,6 +356,8 @@ pub fn draw<B: Backend>(
                     .block(
                         Block::default()
                             .borders(Borders::ALL)
+                            .border_style(Style::default().fg(app.theme.border.to_tui_color()))
+                            .style(Style::default().bg(app.theme.background.to_tui_color()).fg(app.theme.foreground.to_tui_color()))
                             .title(
                                 Spans::from(
                                     vec![

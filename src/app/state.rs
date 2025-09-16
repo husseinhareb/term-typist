@@ -57,6 +57,8 @@ pub struct App {
     pub keyboard_switch: String,
     pub audio_enabled: bool,
     pub theme: Theme,
+    // Cursor index for the Settings list (which line is selected)
+    pub settings_cursor: usize,
 }
 
 impl App {
@@ -116,6 +118,7 @@ impl App {
             keyboard_switch: kb_switch,
             audio_enabled,
             theme: Theme::load(),
+            settings_cursor: 0,
         }
     }
 

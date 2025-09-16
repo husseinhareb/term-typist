@@ -206,4 +206,15 @@ impl Theme {
 
 {}"#, toml_content)
     }
+
+    /// Save the current theme to the config file (~/.config/term-typist/theme.toml)
+    pub fn save_to_config(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let config_dir = Self::config_dir_path()?;
+        fs::create_dir_all(&config_dir)?;
+        let config_file = config_dir.join("theme.toml");
+        let toml_content = toml::to_string_pretty(self)?;
+        let commented = Self::add_config_comments(&toml_content);
+        fs::write(config_file, commented)?;
+        Ok(())
+    }
 }
