@@ -545,7 +545,12 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection, theme: &The
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title(" Recent Tests  (↑ older, ↓ newer, PgUp/PgDn page, Home/End) "),
+                .title(Span::styled(
+                    " Recent Tests  (↑ older, ↓ newer, PgUp/PgDn page, Home/End) ",
+                    Style::default().fg(theme.title.to_tui_color()),
+                ))
+                .border_style(Style::default().fg(theme.border.to_tui_color()))
+                .style(Style::default().bg(theme.background.to_tui_color()).fg(theme.foreground.to_tui_color())),
         )
         .widths(&[
             Constraint::Length(19),

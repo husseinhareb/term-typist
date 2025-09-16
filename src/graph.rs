@@ -29,30 +29,47 @@ pub fn draw_wpm_chart<B: Backend>(f: &mut Frame<B>, area: Rect, data: &[(u64, f6
 
     // Generate axis labels at min, mid, max
     let x_labels = vec![
-        Span::styled("0", Style::default().add_modifier(Modifier::BOLD)),
-        Span::raw(format!("{}", (max_t / 2.0).round())),
+        Span::styled(
+            "0",
+            Style::default().fg(theme.chart_axis.to_tui_color()).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            format!("{}", (max_t / 2.0).round()),
+            Style::default().fg(theme.chart_axis.to_tui_color()),
+        ),
         Span::styled(
             format!("{}", max_t.round()),
-            Style::default().add_modifier(Modifier::BOLD),
+            Style::default().fg(theme.chart_axis.to_tui_color()).add_modifier(Modifier::BOLD),
         ),
     ];
     let y_labels = vec![
-        Span::styled("0", Style::default().add_modifier(Modifier::BOLD)),
-        Span::raw(format!("{}", (max_w / 2.0).round())),
+        Span::styled(
+            "0",
+            Style::default().fg(theme.chart_axis.to_tui_color()).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            format!("{}", (max_w / 2.0).round()),
+            Style::default().fg(theme.chart_axis.to_tui_color()),
+        ),
         Span::styled(
             format!("{}", max_w.round()),
-            Style::default().add_modifier(Modifier::BOLD),
+            Style::default().fg(theme.chart_axis.to_tui_color()).add_modifier(Modifier::BOLD),
         ),
     ];
 
     // Build the chart
     let chart = Chart::new(vec![dataset])
         .block(
-            Block::default().
-                title(Span::styled("WPM Over Time", Style::default().fg(theme.stats_value.to_tui_color()).add_modifier(Modifier::BOLD))).
-                borders(Borders::ALL).
-                border_style(Style::default().fg(theme.border.to_tui_color())),
+            Block::default()
+                .title(Span::styled(
+                    "WPM Over Time",
+                    Style::default().fg(theme.stats_value.to_tui_color()).add_modifier(Modifier::BOLD),
+                ))
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(theme.border.to_tui_color()))
+                .style(Style::default().bg(theme.background.to_tui_color()).fg(theme.foreground.to_tui_color())),
         )
+        .style(Style::default().bg(theme.background.to_tui_color()).fg(theme.foreground.to_tui_color()))
         .x_axis(
             Axis::default()
                 .title(Span::styled("Seconds", Style::default().fg(theme.chart_labels.to_tui_color())))
