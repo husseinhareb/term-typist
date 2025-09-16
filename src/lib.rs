@@ -6,7 +6,7 @@ use crossterm::{
     terminal::{ disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen },
     event::{ self, Event, KeyCode, KeyEvent, KeyModifiers },
 };
-use tui::{ backend::CrosstermBackend, Terminal };
+use tui::{ backend::CrosstermBackend, Terminal, widgets::Paragraph, style::Style };
 
 mod app;       // src/app/mod.rs → state.rs, input.rs, config.rs
 mod ui;        // src/ui/mod.rs → draw.rs, keyboard.rs
@@ -79,6 +79,12 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
         // — Draw typing UI, Profile, or Settings
         terminal.draw(|f| {
+            // First, paint a full-screen themed background so no terminal
+            // pixels show through at the edges (this fills every cell).
+            let size = f.size();
+            let bg = Paragraph::new("").style(Style::default().bg(app.theme.background.to_tui_color()).fg(app.theme.foreground.to_tui_color()));
+            f.render_widget(bg, size);
+
             match app.mode {
                 Mode::Profile => {
                     // draw_profile now accepts (&mut Frame, &Connection, &Theme)
