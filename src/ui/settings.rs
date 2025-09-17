@@ -52,7 +52,7 @@ pub fn draw_settings<B: Backend>(f: &mut Frame<B>, app: &App, _keyboard: &Keyboa
     let mut cur_theme_name = "Custom".to_string();
     for &n in theme_names.iter() {
         if let Some(p) = crate::themes_presets::theme_by_name(n) {
-            if p.title.to_tui_color() == app.theme.title.to_tui_color() {
+            if p == app.theme {
                 cur_theme_name = n.to_string();
                 break;
             }

@@ -6,7 +6,7 @@ use tui::style::Color;
 
 /// Complete theme configuration for the terminal typing test application.
 /// All colors have sensible defaults and can be customized via config file.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Theme {
     // General UI colors
     pub background: ThemeColor,
@@ -49,7 +49,7 @@ pub struct Theme {
 }
 
 /// Represents a color that can be serialized to/from TOML
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(untagged)]
 pub enum ThemeColor {
     /// Named color like "red", "blue", "yellow"

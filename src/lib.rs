@@ -318,8 +318,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                                         let mut idx = 0usize;
                                         for (i, &n) in presets.iter().enumerate() {
                                             if let Some(p) = crate::themes_presets::theme_by_name(n) {
-                                                if p.title.to_tui_color() == app.theme.title.to_tui_color() { idx = i; break; }
-                                            }
+                                                    if p == app.theme { idx = i; break; }
+                                                }
                                         }
                                         if left { idx = (idx + presets.len() - 1) % presets.len(); } else { idx = (idx + 1) % presets.len(); }
                                         if let Some(next) = crate::themes_presets::theme_by_name(presets[idx]) { app.theme = next; let _ = app.theme.save_to_config(); }
@@ -360,7 +360,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                                 let mut idx = 0usize;
                                 for (i, name) in presets.iter().enumerate() {
                                     if let Some(p) = crate::themes_presets::theme_by_name(name) {
-                                        if p.title.to_tui_color() == app.theme.title.to_tui_color() {
+                                        if p == app.theme {
                                             idx = i;
                                             break;
                                         }

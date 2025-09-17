@@ -101,7 +101,7 @@ pub fn dracula() -> Theme {
         key_normal_fg: ThemeColor::Rgb([248, 248, 242]),
         key_pressed_bg: ThemeColor::Rgb([189, 147, 249]),
         key_pressed_fg: ThemeColor::Rgb([30, 30, 36]),
-        key_border: ThemeColor::Rgb([68, 71, 90]),
+    key_border: ThemeColor::Rgb([48, 51, 70]),
 
         chart_line: ThemeColor::Rgb([80, 250, 123]),
         chart_axis: ThemeColor::Rgb([120, 120, 140]),
@@ -138,7 +138,7 @@ pub fn solarized_dark() -> Theme {
         key_normal_fg: ThemeColor::Rgb([131, 148, 150]),
         key_pressed_bg: ThemeColor::Rgb([181, 137, 0]),
         key_pressed_fg: ThemeColor::Rgb([0, 43, 54]),
-        key_border: ThemeColor::Rgb([7, 54, 66]),
+    key_border: ThemeColor::Rgb([10, 48, 60]),
 
         chart_line: ThemeColor::Rgb([38, 139, 210]),
         chart_axis: ThemeColor::Rgb([88, 110, 117]),
@@ -212,7 +212,7 @@ pub fn nord() -> Theme {
         key_normal_fg: ThemeColor::Rgb([216, 222, 233]),
         key_pressed_bg: ThemeColor::Rgb([129, 161, 193]),
         key_pressed_fg: ThemeColor::Rgb([30, 32, 38]),
-        key_border: ThemeColor::Rgb([59, 66, 82]),
+    key_border: ThemeColor::Rgb([49, 56, 72]),
 
         chart_line: ThemeColor::Rgb([143, 188, 187]),
         chart_axis: ThemeColor::Rgb([116, 125, 140]),
@@ -249,7 +249,7 @@ pub fn one_dark() -> Theme {
         key_normal_fg: ThemeColor::Rgb([171, 178, 191]),
         key_pressed_bg: ThemeColor::Rgb([97, 175, 239]),
         key_pressed_fg: ThemeColor::Rgb([30, 32, 38]),
-        key_border: ThemeColor::Rgb([60, 64, 72]),
+    key_border: ThemeColor::Rgb([50, 54, 62]),
 
         chart_line: ThemeColor::Rgb([152, 195, 121]),
         chart_axis: ThemeColor::Rgb([120, 124, 132]),
@@ -286,7 +286,7 @@ pub fn monokai() -> Theme {
         key_normal_fg: ThemeColor::Rgb([248, 248, 242]),
         key_pressed_bg: ThemeColor::Rgb([249, 38, 114]),
         key_pressed_fg: ThemeColor::Rgb([30, 30, 24]),
-        key_border: ThemeColor::Rgb([60, 60, 50]),
+    key_border: ThemeColor::Rgb([100, 100, 90]),
 
         chart_line: ThemeColor::Rgb([166, 226, 46]),
         chart_axis: ThemeColor::Rgb([120, 120, 100]),
