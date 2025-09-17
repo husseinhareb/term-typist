@@ -30,3 +30,38 @@ pub fn accuracy(correct_chars: usize, incorrect_chars: usize) -> f64 {
         ((correct_chars as f64) / (total as f64)) * 100.0
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn net_wpm_zero_elapsed() {
+        assert_eq!(net_wpm(10, 2, 0.0), 0.0);
+    }
+
+    #[test]
+    fn net_wpm_negative_diff() {
+        // more incorrect than correct
+        assert_eq!(net_wpm(2, 5, 60.0), 0.0);
+    }
+
+    #[test]
+    fn net_wpm_basic() {
+        // 55 correct, 5 incorrect => diff = 50 chars => 10 words in 1 minute => 10 WPM
+        let w = net_wpm(55, 5, 60.0);
+        assert!((w - 10.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn accuracy_zero_total() {
+        assert_eq!(accuracy(0, 0), 100.0);
+    }
+
+    #[test]
+    fn accuracy_basic() {
+        // 80 correct, 20 incorrect => 80% accuracy
+        let a = accuracy(80, 20);
+        assert!((a - 80.0).abs() < 1e-6);
+    }
+}
