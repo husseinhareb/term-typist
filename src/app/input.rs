@@ -1,18 +1,48 @@
 // src/app/input.rs
 use crossterm::event::KeyCode;
 use crate::app::state::{App, Mode, Status};
+use crate::generator;
 
 /// Handle navigation keys to switch tabs and adjust selected values.
 pub fn handle_nav(app: &mut App, code: KeyCode) {
+    // capture previous selection to detect changes
+    let prev_tab = app.selected_tab;
+    let prev_value = app.selected_value;
+
     match code {
         KeyCode::Char('1') => app.selected_tab = 0,
         KeyCode::Char('2') => app.selected_tab = 1,
         KeyCode::Char('3') => app.selected_tab = 2,
         KeyCode::Left if app.selected_value > 0 => app.selected_value -= 1,
-        KeyCode::Right if app.selected_value + 1 < app.current_options().len() => {
+        KeyCode::Right if app.current_options().len() > 0 && app.selected_value + 1 < app.current_options().len() => {
             app.selected_value += 1;
         }
         _ => {}
+    }
+
+    // If tab changed, ensure selected_value is within new options' bounds
+    if app.selected_tab != prev_tab {
+        let opts_len = app.current_options().len();
+        if opts_len == 0 {
+            app.selected_value = 0;
+        } else {
+            app.selected_value = std::cmp::min(app.selected_value, opts_len - 1);
+        }
+    }
+
+    // If selection changed and we're not currently typing, regenerate the preview target so
+    // the new number-of-words or time choice is visible immediately.
+    if (app.selected_tab != prev_tab || app.selected_value != prev_value) && app.mode != Mode::Insert {
+        if app.selected_tab == 2 {
+            // Zen mode: clear the generated target and reset free_text
+            app.target = String::new();
+            app.status = vec![];
+            app.free_text.clear();
+        } else {
+            let new_target = generator::generate_for_mode(app.selected_tab, app.selected_value);
+            app.target = new_target.clone();
+            app.status = vec![Status::Untyped; new_target.chars().count()];
+        }
     }
 }
 
