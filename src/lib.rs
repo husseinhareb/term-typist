@@ -48,9 +48,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut cached_net = 0.0;
     let mut cached_acc = 0.0;
 
-    // — App factory (e.g. 30-word sentence)
+    // — App factory: generate target text sized to the selected mode/value
     let make_app = || {
-        let sentence = generator::generate_random_sentence(30);
+        // default to a reasonable 30-word sentence for first run
+        let sentence = generator::generate_for_mode(1, 1); // Words mode, index 1 -> 25 (+ buffer)
         App::new(sentence)
     };
     let mut app = make_app();
@@ -171,6 +172,12 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 match app.mode {
                     Mode::View => {
                         if code == KeyCode::Enter {
+                            // regenerate target according to current mode/options so the test length
+                            // matches what the user selected.
+                            let new_target = generator::generate_for_mode(app.selected_tab, app.selected_value);
+                            app.target = new_target.clone();
+                            app.status = vec![crate::app::state::Status::Untyped; new_target.chars().count()];
+
                             app.mode = Mode::Insert;
                             let now = Instant::now();
                             app.start = Some(now);

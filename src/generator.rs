@@ -53,3 +53,36 @@ pub fn generate_random_sentence(num_words: usize) -> String {
 
     sentence.trim().to_string()
 }
+
+/// Generate a target text sized according to the selected test mode and value.
+///
+/// - `selected_tab`: 0 = Time, 1 = Words, 2 = Zen
+/// - `selected_value`: index into the options returned by `App::current_options()` for tabs 0/1
+pub fn generate_for_mode(selected_tab: usize, selected_value: usize) -> String {
+    // conservative average typing speed to size time-based tests (words per minute)
+    const DEFAULT_WPM: f64 = 40.0;
+
+    let num_words = match selected_tab {
+        0 => {
+            // Time mode: compute words = seconds * (WPM / 60)
+            let options = [15u16, 30u16, 60u16, 100u16];
+            let secs = options.get(selected_value).copied().unwrap_or(30u16) as f64;
+            let words = (secs * (DEFAULT_WPM / 60.0)).ceil() as usize;
+            // add a small buffer so the user doesn't run out of words early
+            (words + 5).max(10)
+        }
+        1 => {
+            // Words mode: generate roughly the requested number of words, plus a small buffer
+            let options = [10u16, 25u16, 50u16, 100u16];
+            let w = options.get(selected_value).copied().unwrap_or(25u16) as usize;
+            let buffer = (w as f64 * 0.12).ceil() as usize + 2; // ~12% + 2 words
+            w + buffer
+        }
+        _ => {
+            // Zen mode: produce a long, continuous block
+            200usize
+        }
+    };
+
+    generate_random_sentence(num_words)
+}
