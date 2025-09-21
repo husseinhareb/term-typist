@@ -260,6 +260,83 @@ pub fn read_audio_enabled() -> io::Result<Option<bool>> {
     Ok(None)
 }
 
+/// Write the selected test mode and value to config as: test_mode <tab> test_value <value>
+pub fn write_selected_mode_value(tab: usize, value: usize) -> io::Result<()> {
+    let file_path = config_file()?;
+    let mut file_content = String::new();
+
+    if file_path.exists() {
+        let mut file = File::open(&file_path)?;
+        file.read_to_string(&mut file_content)?;
+    }
+
+    let mut updated_content = String::new();
+    let mut found_mode = false;
+    let mut found_value = false;
+
+    for line in file_content.lines() {
+        if line.trim().starts_with("test_mode") {
+            found_mode = true;
+            updated_content.push_str(&format!("test_mode {}\n", tab));
+        } else if line.trim().starts_with("test_value") {
+            found_value = true;
+            updated_content.push_str(&format!("test_value {}\n", value));
+        } else {
+            updated_content.push_str(line);
+            updated_content.push('\n');
+        }
+    }
+
+    if !found_mode {
+        updated_content.push_str(&format!("test_mode {}\n", tab));
+    }
+    if !found_value {
+        updated_content.push_str(&format!("test_value {}\n", value));
+    }
+
+    if let Some(parent) = file_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    let mut file = File::create(&file_path)?;
+    file.write_all(updated_content.as_bytes())?;
+    Ok(())
+}
+
+/// Read persisted test_mode and test_value from config. Returns (tab, value) if found,
+/// otherwise returns None.
+pub fn read_selected_mode_value() -> io::Result<Option<(usize, usize)>> {
+    let file_path = config_file()?;
+    if !file_path.exists() {
+        return Ok(None);
+    }
+    let file = File::open(&file_path)?;
+    let reader = BufReader::new(file);
+
+    let mut tab: Option<usize> = None;
+    let mut value: Option<usize> = None;
+
+    for line in reader.lines() {
+        let line = line?;
+        if line.trim().starts_with("test_mode") {
+            if let Some(tok) = line.split_whitespace().skip(1).next() {
+                if let Ok(n) = tok.parse::<usize>() { tab = Some(n); }
+            }
+        }
+        if line.trim().starts_with("test_value") {
+            if let Some(tok) = line.split_whitespace().skip(1).next() {
+                if let Ok(n) = tok.parse::<usize>() { value = Some(n); }
+            }
+        }
+    }
+
+    if let (Some(t), Some(v)) = (tab, value) {
+        Ok(Some((t, v)))
+    } else {
+        Ok(None)
+    }
+}
+
 // Function to get the path of the config file
 fn config_file() -> Result<PathBuf, io::Error> {
     let config_dir = match dirs::config_dir() {

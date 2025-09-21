@@ -59,8 +59,9 @@ pub fn generate_random_sentence(num_words: usize) -> String {
 /// - `selected_tab`: 0 = Time, 1 = Words, 2 = Zen
 /// - `selected_value`: index into the options returned by `App::current_options()` for tabs 0/1
 pub fn generate_for_mode(selected_tab: usize, selected_value: usize) -> String {
-    // conservative average typing speed to size time-based tests (words per minute)
-    const DEFAULT_WPM: f64 = 40.0;
+    // Conservative baseline typing speed used to size time-based tests (words per minute).
+    // Raised from 40 to 60 so faster typists have more words available during the timer.
+    const DEFAULT_WPM: f64 = 60.0;
 
     let num_words = match selected_tab {
         0 => {
@@ -68,8 +69,9 @@ pub fn generate_for_mode(selected_tab: usize, selected_value: usize) -> String {
             let options = [15u16, 30u16, 60u16, 100u16];
             let secs = options.get(selected_value).copied().unwrap_or(30u16) as f64;
             let words = (secs * (DEFAULT_WPM / 60.0)).ceil() as usize;
-            // add a small buffer so the user doesn't run out of words early
-            (words + 5).max(10)
+            // add a larger buffer so fast typists don't run out of words before the
+            // timer expires. Ensure a reasonable minimum size.
+            (words + 8).max(12)
         }
         1 => {
             // Words mode: generate roughly the requested number of words, plus a small buffer

@@ -5,6 +5,15 @@ use crate::generator;
 
 /// Handle navigation keys to switch tabs and adjust selected values.
 pub fn handle_nav(app: &mut App, code: KeyCode) {
+    // Do not allow navigation to change selected tab/value while typing (Insert mode).
+    // Changing the selection during an active test can cause the preview/target to
+    // become inconsistent with the user's last visible preview and lead to unexpected
+    // target lengths on restart. Navigation is still allowed in View/Settings/Profile.
+    use crate::app::state::Mode;
+    if app.mode == Mode::Insert {
+        return;
+    }
+
     // capture previous selection to detect changes
     let prev_tab = app.selected_tab;
     let prev_value = app.selected_value;
@@ -31,7 +40,8 @@ pub fn handle_nav(app: &mut App, code: KeyCode) {
     }
 
     // If selection changed and we're not currently typing, regenerate the preview target so
-    // the new number-of-words or time choice is visible immediately.
+    // the new number-of-words or time choice is visible immediately. Persist the
+    // selection to config so it survives restarts.
     if (app.selected_tab != prev_tab || app.selected_value != prev_value) && app.mode != Mode::Insert {
         if app.selected_tab == 2 {
             // Zen mode: clear the generated target and reset free_text
@@ -43,6 +53,8 @@ pub fn handle_nav(app: &mut App, code: KeyCode) {
             app.target = new_target.clone();
             app.status = vec![Status::Untyped; new_target.chars().count()];
         }
+        // Persist the selection so closing and reopening the app restores it.
+        let _ = crate::app::config::write_selected_mode_value(app.selected_tab, app.selected_value);
     }
 }
 

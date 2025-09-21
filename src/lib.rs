@@ -49,10 +49,32 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut cached_acc = 0.0;
 
     // — App factory: generate target text sized to the selected mode/value
+    // Attempt to honour a persisted `nb_of_words` config: if present and matching one
+    // of the Words options, start in Words mode with that selected value. Otherwise
+    // default to Time mode 15s (selected_tab=0, selected_value=0).
     let make_app = || {
-        // default to a reasonable 30-word sentence for first run
-        let sentence = generator::generate_for_mode(1, 1); // Words mode, index 1 -> 25 (+ buffer)
-        App::new(sentence)
+        // Default to Time 15s
+        let mut default_tab = 0usize;
+        let mut default_value = 0usize;
+
+        // First, prefer persisted explicit selection (test_mode/test_value)
+        if let Ok(Some((tab, val))) = crate::app::config::read_selected_mode_value() {
+            default_tab = tab;
+            default_value = val;
+        } else if let Ok(nb) = crate::app::config::read_nb_of_words() {
+            // Backwards-compat: if nb_of_words was saved (older config), map it to Words options
+            let words_options = [10i32, 25i32, 50i32, 100i32];
+            if let Some(idx) = words_options.iter().position(|&w| w == nb) {
+                default_tab = 1; // Words mode
+                default_value = idx;
+            }
+        }
+
+        let sentence = generator::generate_for_mode(default_tab, default_value);
+        let mut a = App::new(sentence);
+        a.selected_tab = default_tab;
+        a.selected_value = default_value;
+        a
     };
     let mut app = make_app();
     let mut keyboard = Keyboard::new();
@@ -136,11 +158,25 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                                 save_test(&mut conn, &app)?;
                             }
                             // Restart the test regardless of whether it started
+                            // Preserve UI choices (layout, switch, and selected mode/value)
                             let cur_layout = app.keyboard_layout;
                             let cur_switch = app.keyboard_switch.clone();
-                            app = make_app();
+                            let cur_tab = app.selected_tab;
+                            let cur_value = app.selected_value;
+
+                            // Build a new App using a target that matches the current selection
+                            let new_target = if cur_tab == 2 {
+                                // Zen mode: start with empty target
+                                String::new()
+                            } else {
+                                generator::generate_for_mode(cur_tab, cur_value)
+                            };
+                            app = App::new(new_target);
+                            // restore preserved UI state
                             app.keyboard_layout = cur_layout;
                             app.keyboard_switch = cur_switch;
+                            app.selected_tab = cur_tab;
+                            app.selected_value = cur_value;
                             // Clear any pressed key highlight
                             keyboard.pressed_key = None;
                             last_sample = 0;
@@ -172,11 +208,19 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 match app.mode {
                     Mode::View => {
                         if code == KeyCode::Enter {
-                            // regenerate target according to current mode/options so the test length
-                            // matches what the user selected.
-                            let new_target = generator::generate_for_mode(app.selected_tab, app.selected_value);
-                            app.target = new_target.clone();
-                            app.status = vec![crate::app::state::Status::Untyped; new_target.chars().count()];
+                            // When entering Insert mode from View, prefer to keep the previewed
+                            // `app.target` that the user already saw. Only regenerate if the
+                            // target is empty (for example Zen mode cleared it) so the user
+                            // experience is consistent and the text doesn't unexpectedly change
+                            // on pressing Enter.
+                            if app.target.is_empty() {
+                                let new_target = generator::generate_for_mode(app.selected_tab, app.selected_value);
+                                app.target = new_target.clone();
+                                app.status = vec![crate::app::state::Status::Untyped; new_target.chars().count()];
+                            } else {
+                                // Ensure status length matches existing target
+                                app.status = vec![crate::app::state::Status::Untyped; app.target.chars().count()];
+                            }
 
                             app.mode = Mode::Insert;
                             let now = Instant::now();
@@ -239,12 +283,25 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                         loop {
                             if let Event::Key(KeyEvent { code, modifiers, .. }) = event::read()? {
                                 if code == KeyCode::Esc {
-                                    // When viewing finished results, Esc restarts without saving again
+                                    // When viewing finished results, Esc restarts without saving again.
+                                    // Preserve selected tab/value and other UI settings, and
+                                    // regenerate a target that matches the user's selection so
+                                    // the restarted test length/time corresponds to what was selected.
                                     let cur_layout = app.keyboard_layout;
                                     let cur_switch = app.keyboard_switch.clone();
-                                    app = make_app();
+                                    let cur_tab = app.selected_tab;
+                                    let cur_value = app.selected_value;
+
+                                    let new_target = if cur_tab == 2 {
+                                        String::new()
+                                    } else {
+                                        generator::generate_for_mode(cur_tab, cur_value)
+                                    };
+                                    app = App::new(new_target);
                                     app.keyboard_layout = cur_layout;
                                     app.keyboard_switch = cur_switch;
+                                    app.selected_tab = cur_tab;
+                                    app.selected_value = cur_value;
                                     keyboard.pressed_key = None;
                                     last_sample = 0;
                                     break;
