@@ -45,7 +45,7 @@ pub fn draw_settings<B: Backend>(f: &mut Frame<B>, app: &App, _keyboard: &Keyboa
         crate::app::state::KeyboardLayout::Dvorak => "DVORAK",
         crate::app::state::KeyboardLayout::Qwertz => "QWERTZ",
     };
-    lines.push(format!("Keyboard layout: {}  (Left/Right to change)", layout_label));
+    lines.push(format!("Keyboard layout: <<{}>>", layout_label));
 
     // Theme
     let theme_names = themes_presets::preset_names();
@@ -58,7 +58,11 @@ pub fn draw_settings<B: Backend>(f: &mut Frame<B>, app: &App, _keyboard: &Keyboa
             }
         }
     }
-    lines.push(format!("Theme: {}  (Left/Right to change)", cur_theme_name));
+    lines.push(format!("Theme: <<{}>>", cur_theme_name));
+
+    // Audio
+    // Keyboard switch selection (audio sample set used for key sounds)
+    lines.push(format!("Keyboard switch: <<{}>>", app.keyboard_switch));
 
     // Audio
     lines.push(format!("Audio enabled: {}  (press 'a' to toggle)", if app.audio_enabled { "On" } else { "Off" }));

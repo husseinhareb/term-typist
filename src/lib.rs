@@ -351,7 +351,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                         if code == KeyCode::Left || code == KeyCode::Right {
                             let left = code == KeyCode::Left;
                             // number of settings rows (must match draw_settings ordering)
-                            let total = 10usize;
+                            let total = 11usize;
                             let sel = if total > 0 { cmp::min(app.settings_cursor, total - 1) } else { 0 };
                             match sel {
                                 0 => { app.show_mode = !app.show_mode; }
@@ -389,7 +389,17 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                                         if let Some(next) = crate::themes_presets::theme_by_name(presets[idx]) { app.theme = next; let _ = app.theme.save_to_config(); }
                                     }
                                 }
-                                9 => { app.audio_enabled = !app.audio_enabled; let _ = crate::app::config::write_audio_enabled(app.audio_enabled); }
+                                9 => {
+                                    // Keyboard switch: cycle available switch samples
+                                    let list = crate::audio::list_switches();
+                                    if !list.is_empty() {
+                                        let mut idx = list.iter().position(|s| s == &app.keyboard_switch).unwrap_or(0);
+                                        if left { idx = (idx + list.len() - 1) % list.len(); } else { idx = (idx + 1) % list.len(); }
+                                        app.keyboard_switch = list[idx].clone();
+                                        let _ = crate::app::config::write_keyboard_switch(&app.keyboard_switch);
+                                    }
+                                }
+                                10 => { app.audio_enabled = !app.audio_enabled; let _ = crate::app::config::write_audio_enabled(app.audio_enabled); }
                                 _ => {}
                             }
                             continue 'main;
