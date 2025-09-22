@@ -189,7 +189,12 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 keyboard.handle_key(&code);
 
                 // ── Global navigation (tabs & values)
-                handle_nav(&mut app, code);
+                // Only handle navigation keys when we're in the main View state.
+                // This prevents UI-specific Left/Right usage (e.g., in Settings)
+                // from changing the View's selected tab/value.
+                if app.mode == Mode::View {
+                    handle_nav(&mut app, code);
+                }
 
                 // ── 'p' opens Profile, 's' opens Settings (accept upper/lower case)
                 if let KeyCode::Char(c) = code {
