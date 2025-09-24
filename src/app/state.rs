@@ -16,8 +16,10 @@ pub enum Mode {
     View,
     Insert,
     Finished,
-    Profile,
-    Settings,
+        Profile,
+        Settings,
+        Menu,
+        Help,
 }
 
 /// Supported keyboard layouts for on-screen keyboard and input mapping.
@@ -59,6 +61,8 @@ pub struct App {
     pub theme: Theme,
     // Cursor index for the Settings list (which line is selected)
     pub settings_cursor: usize,
+    // Cursor for popup menu
+    pub menu_cursor: usize,
 }
 
 impl App {
@@ -119,6 +123,7 @@ impl App {
             audio_enabled,
             theme: Theme::load(),
             settings_cursor: 0,
+            menu_cursor: 0,
         }
     }
 

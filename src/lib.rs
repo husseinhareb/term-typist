@@ -117,6 +117,12 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     // draw_settings should render your settings UI
                     draw_settings(f, &app, &keyboard);
                 }
+                Mode::Menu => {
+                    crate::ui::menu::draw_menu(f, &app);
+                }
+                Mode::Help => {
+                    crate::ui::help::draw_help(f, &app);
+                }
                 _ => {
                     draw(f, &app, &keyboard, cached_net, cached_acc);
                 }
@@ -126,7 +132,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         // — Handle input & toggles
         let timeout = tick_rate.checked_sub(last_tick.elapsed()).unwrap_or_default();
         if event::poll(timeout)? {
-            if let Event::Key(KeyEvent { code, modifiers, .. }) = event::read()? {
+            if let Event::Key(KeyEvent { code: mut code, modifiers: mut modifiers, .. }) = event::read()? {
                 // ── SHIFT+NUMBER PANEL TOGGLES
                 match code {
                     KeyCode::Char('!') => { app.show_mode     = !app.show_mode;     continue 'main; }
@@ -144,7 +150,31 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     break 'main;
                 }
 
-                // ── Esc: in Profile or Settings → back to View; else restart test
+                // ── Shift+Esc: open menu; F1 and 'm'/'M' are explicit fallbacks.
+                if (code == KeyCode::Esc && modifiers.contains(KeyModifiers::SHIFT)) || code == KeyCode::F(1) || matches!(code, KeyCode::Char(c) if c.to_ascii_lowercase() == 'm') {
+                    app.mode = Mode::Menu;
+                    app.menu_cursor = 0;
+                    continue 'main;
+                }
+
+                // ── Double-Esc detection for terminals that don't report Shift.
+                if code == KeyCode::Esc && modifiers.is_empty() {
+                    let lookahead = Duration::from_millis(250);
+                    if event::poll(lookahead)? {
+                        if let Event::Key(KeyEvent { code: next_code, modifiers: next_mods, .. }) = event::read()? {
+                            if next_code == KeyCode::Esc {
+                                app.mode = Mode::Menu;
+                                app.menu_cursor = 0;
+                                continue 'main;
+                            } else {
+                                // treat the next key as the current key for the rest of handling
+                                code = next_code;
+                                modifiers = next_mods;
+                            }
+                        }
+                    }
+                }
+
                 // Only save the test to the DB if it was actually started (app.start.is_some()).
                 if code == KeyCode::Esc && modifiers.is_empty() {
                     match app.mode {
@@ -189,9 +219,6 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 keyboard.handle_key(&code);
 
                 // ── Global navigation (tabs & values)
-                // Only handle navigation keys when we're in the main View state.
-                // This prevents UI-specific Left/Right usage (e.g., in Settings)
-                // from changing the View's selected tab/value.
                 if app.mode == Mode::View {
                     handle_nav(&mut app, code);
                 }
@@ -211,6 +238,27 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
                 // ── Mode-specific input
                 match app.mode {
+                    Mode::Menu => {
+                        match code {
+                            KeyCode::Up | KeyCode::Char('k') => { if app.menu_cursor>0 { app.menu_cursor -= 1 }; continue 'main; }
+                            KeyCode::Down | KeyCode::Char('j') => { app.menu_cursor = app.menu_cursor.saturating_add(1); continue 'main; }
+                            KeyCode::Enter => {
+                                match app.menu_cursor {
+                                    0 => { app.mode = Mode::Settings; app.menu_cursor = 0; }
+                                    1 => { app.mode = Mode::Help; app.menu_cursor = 0; }
+                                    2 => { disable_raw_mode()?; execute!(io::stdout(), LeaveAlternateScreen)?; return Ok(()); }
+                                    _ => {}
+                                }
+                                continue 'main;
+                            }
+                            KeyCode::Esc => { app.mode = Mode::View; continue 'main; }
+                            _ => {}
+                        }
+                    }
+                    Mode::Help => {
+                        // any Esc returns to previous mode (View)
+                        if code == KeyCode::Esc { app.mode = Mode::View; continue 'main; }
+                    }
                     Mode::View => {
                         if code == KeyCode::Enter {
                             // When entering Insert mode from View, prefer to keep the previewed

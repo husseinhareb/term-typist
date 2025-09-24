@@ -24,7 +24,9 @@ pub fn draw_settings<B: Backend>(f: &mut Frame<B>, app: &App, _keyboard: &Keyboa
         .split(f.size());
 
     let title = Paragraph::new("⚙ Settings")
-        .block(Block::default().borders(Borders::ALL).title(Span::styled("⚙ Settings", Style::default().fg(app.theme.title_accent.to_tui_color()).add_modifier(Modifier::BOLD))))
+        // Keep a bordered area for the title but do not render the label
+        // inside the block border itself (user requested removing it).
+        .block(Block::default().borders(Borders::ALL))
         .alignment(tui::layout::Alignment::Center)
         .style(Style::default().bg(app.theme.background.to_tui_color()).fg(app.theme.foreground.to_tui_color()));
     f.render_widget(title, outer[0]);
@@ -67,6 +69,8 @@ pub fn draw_settings<B: Backend>(f: &mut Frame<B>, app: &App, _keyboard: &Keyboa
     // Audio
     lines.push(format!("Audio enabled: {}  (press 'a' to toggle)", if app.audio_enabled { "On" } else { "Off" }));
 
+    // (Removed extra placeholder convenience settings per user request.)
+
     // Determine paging: compute available rows inside the Settings block (account for borders)
     let area = outer[1];
     // subtract 2 for borders/title (approx); ensure at least 1 row
@@ -94,13 +98,22 @@ pub fn draw_settings<B: Backend>(f: &mut Frame<B>, app: &App, _keyboard: &Keyboa
     let visible = &lines[offset..end];
 
     // Create vertical layout with one chunk per visible line.
-    // Each row gets a Constraint::Length(1) plus space for borders; to be safe
-    // we allocate 3 lines per item if the area is tall enough, otherwise
-    // distribute evenly.
-    let per = if visible.len() > 0 { (area.height as usize).max(visible.len()) / visible.len() } else { 1 };
+    // Compute integer division so heights sum to <= area.height and then
+    // distribute any leftover rows across the top-most chunks. This avoids
+    // the last row taking all remaining space when using naive division.
     let mut cons: Vec<Constraint> = Vec::new();
-    for _ in 0..visible.len() {
-        cons.push(Constraint::Length(per as u16));
+    if visible.len() > 0 {
+        // Use the same available height we used for paging (subtract 2 for
+        // borders/title) so the constraints match the visible slice size.
+        let total_h = if area.height > 2 { (area.height - 2) as usize } else { 1usize };
+        let n = visible.len();
+        // Use floor division so every row gets the same height. This may
+        // leave a small unused gap at the bottom, but guarantees identical
+        // box heights for all items which is the user's requirement.
+        let base = std::cmp::max(1, total_h / n);
+        for _ in 0..n {
+            cons.push(Constraint::Length(base as u16));
+        }
     }
     // Fallback: ensure at least one constraint so Layout::split doesn't panic
     if cons.is_empty() {
