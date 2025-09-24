@@ -58,7 +58,13 @@ pub fn save_test(conn: &mut Connection, app: &App) -> Result<()> {
         1 => "words",
         _ => "zen",
     };
-    let target_value = app.current_options()[app.selected_value] as i64;
+    // current_options() returns an empty slice for Zen mode; guard against
+    // indexing into an empty slice by falling back to 0 when no options exist.
+    let target_value = app
+        .current_options()
+        .get(app.selected_value)
+        .cloned()
+        .unwrap_or(0) as i64;
     let diff = (app.correct_chars as i64) - (app.incorrect_chars as i64);
     let wpm = if duration_ms>0 {
         (diff.max(0) as f64)/5.0 / (duration_ms as f64/60000.0)
