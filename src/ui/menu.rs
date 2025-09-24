@@ -30,20 +30,20 @@ pub fn draw_menu<B: Backend>(f: &mut Frame<B>, app: &App) {
         .highlight_style(Style::default().fg(app.theme.foreground.to_tui_color()).bg(app.theme.highlight.to_tui_color()).add_modifier(Modifier::BOLD));
 
     // place the list inside the rect with a small margin but do not clear
-    // Prepare ASCII art header (user-provided) and colorize alternating lines.
-    let ascii_lines = vec![
-        r#"   __                                   __                 .__          __   "#,
-        r#" _/  |_  ___________  _____           _/  |_ ___.__.______ |__| _______/  |_ "#,
-        r#" \\   __\/ __ \\_  __ \/     \\   ______ \\   __<   |  \\____ \\|  |/  ___/\   __\"#,
-        r#"  |  | \  ___/|  | \/  Y Y  \ /_____/  |  |  \___  ||  |_> >  |\___ \  |  |  "#,
-        r#"  |__|  \___  >__|  |__|_|  /          |__|  / ____||   __/|__/____  > |__|  "#,
-        r#"           \/            \/                 \/     |__|           \/        "#,
-    ];
+    // Prepare ASCII art header (user-provided). Use a raw string literal so backslashes
+    // and spacing are preserved exactly as the user provided, then colorize alternating lines.
+    let ascii = r#"  __                                   __                 .__          __   
+_/  |_  ___________  _____           _/  |_ ___.__.______ |__| _______/  |_ 
+\   __\/ __ \_  __ \/     \   ______ \   __<   |  |\____ \|  |/  ___/\   __\
+ |  | \  ___/|  | \/  Y Y  \ /_____/  |  |  \___  ||  |_> >  |\___ \  |  |  
+ |__|  \___  >__|  |__|_|  /          |__|  / ____||   __/|__/____  > |__|  
+           \/            \/                 \/     |__|           \/         "#;
 
+    let ascii_lines: Vec<&str> = ascii.lines().collect();
     let mut spans_vec: Vec<Spans> = Vec::new();
     for (i, line) in ascii_lines.iter().enumerate() {
         let color = if i % 2 == 0 { app.theme.title_accent.to_tui_color() } else { app.theme.title.to_tui_color() };
-        spans_vec.push(Spans::from(Span::styled(*line, Style::default().fg(color))));
+        spans_vec.push(Spans::from(Span::styled(line.to_string(), Style::default().fg(color))));
     }
 
     let title_height = spans_vec.len() as u16;

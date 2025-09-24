@@ -150,10 +150,20 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     break 'main;
                 }
 
-                // ── F1, Tab and 'm'/'M' open the menu. (Removed Shift+Esc and double-Esc behavior.)
-                if code == KeyCode::F(1) || code == KeyCode::Tab || matches!(code, KeyCode::Char(c) if c.to_ascii_lowercase() == 'm') {
+                // ── F1 and 'm'/'M' open the menu. Tab toggles it (open -> close, close -> open).
+                if code == KeyCode::F(1) || matches!(code, KeyCode::Char(c) if c.to_ascii_lowercase() == 'm') {
                     app.mode = Mode::Menu;
                     app.menu_cursor = 0;
+                    continue 'main;
+                }
+
+                if code == KeyCode::Tab {
+                    if app.mode == Mode::Menu {
+                        app.mode = Mode::View;
+                    } else {
+                        app.mode = Mode::Menu;
+                        app.menu_cursor = 0;
+                    }
                     continue 'main;
                 }
 
