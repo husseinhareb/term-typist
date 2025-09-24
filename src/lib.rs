@@ -150,21 +150,30 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     break 'main;
                 }
 
-                // ── F1 and 'm'/'M' open the menu. Tab toggles it (open -> close, close -> open).
-                if code == KeyCode::F(1) || matches!(code, KeyCode::Char(c) if c.to_ascii_lowercase() == 'm') {
-                    app.mode = Mode::Menu;
-                    app.menu_cursor = 0;
-                    continue 'main;
-                }
-
+                // ── Menu keys behavior:
+                // - F1 and 'm' only open the menu when we're on the main page (Mode::View).
+                // - Tab toggles the menu: if Menu -> close (to View); if View -> open.
+                // This prevents accidental opens while typing or inside other popups.
                 if code == KeyCode::Tab {
                     if app.mode == Mode::Menu {
+                        // close menu
                         app.mode = Mode::View;
-                    } else {
+                        continue 'main;
+                    }
+                    if app.mode == Mode::View {
+                        // open menu from main view
                         app.mode = Mode::Menu;
                         app.menu_cursor = 0;
+                        continue 'main;
                     }
-                    continue 'main;
+                }
+
+                if app.mode == Mode::View {
+                    if code == KeyCode::F(1) || matches!(code, KeyCode::Char(c) if c.to_ascii_lowercase() == 'm') {
+                        app.mode = Mode::Menu;
+                        app.menu_cursor = 0;
+                        continue 'main;
+                    }
                 }
 
                 // Only save the test to the DB if it was actually started (app.start.is_some()).
