@@ -445,7 +445,10 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection, theme: &The
         .split(chunks[2]);
 
     // WPM-over-time chart (chronological by started_at)
-    let data: Vec<(u64, f64)> = conn
+    // NOTE: the DB stores epoch seconds; plotting raw epoch values makes the
+    // numeric x-axis huge (e.g. 1_7e9). Convert to relative seconds since the
+    // first timestamp in the window so the chart shows elapsed time instead.
+    let raw_data: Vec<(u64, f64)> = conn
         .prepare(
             "SELECT CAST(strftime('%s', started_at) AS INTEGER) AS ts, wpm
                FROM tests
@@ -457,6 +460,14 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection, theme: &The
         .unwrap()
         .filter_map(Result::ok)
         .collect();
+
+    let data: Vec<(u64, f64)> = if raw_data.is_empty() {
+        raw_data
+    } else {
+        let min_ts = raw_data.first().unwrap().0;
+        raw_data.into_iter().map(|(t, w)| (t.saturating_sub(min_ts), w)).collect()
+    };
+
     graph::draw_wpm_chart(f, bottom[0], &data, theme);
 
     // Scrollable Recent Tests table
