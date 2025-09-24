@@ -150,29 +150,11 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     break 'main;
                 }
 
-                // ── Shift+Esc: open menu; F1 and 'm'/'M' are explicit fallbacks.
-                if (code == KeyCode::Esc && modifiers.contains(KeyModifiers::SHIFT)) || code == KeyCode::F(1) || matches!(code, KeyCode::Char(c) if c.to_ascii_lowercase() == 'm') {
+                // ── F1, Tab and 'm'/'M' open the menu. (Removed Shift+Esc and double-Esc behavior.)
+                if code == KeyCode::F(1) || code == KeyCode::Tab || matches!(code, KeyCode::Char(c) if c.to_ascii_lowercase() == 'm') {
                     app.mode = Mode::Menu;
                     app.menu_cursor = 0;
                     continue 'main;
-                }
-
-                // ── Double-Esc detection for terminals that don't report Shift.
-                if code == KeyCode::Esc && modifiers.is_empty() {
-                    let lookahead = Duration::from_millis(250);
-                    if event::poll(lookahead)? {
-                        if let Event::Key(KeyEvent { code: next_code, modifiers: next_mods, .. }) = event::read()? {
-                            if next_code == KeyCode::Esc {
-                                app.mode = Mode::Menu;
-                                app.menu_cursor = 0;
-                                continue 'main;
-                            } else {
-                                // treat the next key as the current key for the rest of handling
-                                code = next_code;
-                                modifiers = next_mods;
-                            }
-                        }
-                    }
                 }
 
                 // Only save the test to the DB if it was actually started (app.start.is_some()).
