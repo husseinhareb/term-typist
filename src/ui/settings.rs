@@ -87,35 +87,57 @@ pub fn draw_settings<B: Backend>(f: &mut Frame<B>, app: &App, _keyboard: &Keyboa
     offset = cmp::min(offset, max_offset);
     let selected_idx = cursor.saturating_sub(offset);
 
-    // Build visible table rows for the current page so we can highlight the
-    // entire row width (Table highlight fills the row background) rather
-    // than only the text span.
+    // Build visible rows and render each as its own bordered Block to create
+    // a rectangular card for every setting. This improves readability when
+    // there are only a few settings on the page.
     let end = cmp::min(offset + avail, total);
-    let mut rows: Vec<Row> = Vec::with_capacity(end - offset);
-    for s in lines[offset..end].iter() {
-        rows.push(Row::new(vec![Cell::from(s.clone())]));
+    let visible = &lines[offset..end];
+
+    // Create vertical layout with one chunk per visible line.
+    // Each row gets a Constraint::Length(1) plus space for borders; to be safe
+    // we allocate 3 lines per item if the area is tall enough, otherwise
+    // distribute evenly.
+    let per = if visible.len() > 0 { (area.height as usize).max(visible.len()) / visible.len() } else { 1 };
+    let mut cons: Vec<Constraint> = Vec::new();
+    for _ in 0..visible.len() {
+        cons.push(Constraint::Length(per as u16));
+    }
+    // Fallback: ensure at least one constraint so Layout::split doesn't panic
+    if cons.is_empty() {
+        cons.push(Constraint::Min(1));
     }
 
-    // Use a stateful Table so the highlight_style covers the full row area.
-    let mut state = TableState::default();
-    state.select(Some(selected_idx));
+    let rows_area = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(cons.as_slice())
+        .split(outer[1]);
 
-    let table = Table::new(rows)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(app.theme.border.to_tui_color()))
-                .style(Style::default().bg(app.theme.background.to_tui_color()).fg(app.theme.foreground.to_tui_color()))
-                .title(Span::styled("Settings", Style::default().fg(app.theme.title.to_tui_color())))
-        )
-        .widths(&[Constraint::Percentage(100)])
-        .column_spacing(0)
-        .highlight_style(
-            Style::default()
-                .bg(app.theme.highlight.to_tui_color())
-                .fg(app.theme.background.to_tui_color()),
-        )
-        .highlight_symbol(" ");
+    for (i, (s, ra)) in visible.iter().zip(rows_area.iter()).enumerate() {
+        let idx = offset + i;
+        let selected = idx == cursor;
+        // Each setting is rendered inside a bordered block. We don't set a
+        // title text here because the setting's content is displayed inside
+        // the block; highlight is expressed via the border color only.
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(
+                if selected {
+                    Style::default().fg(app.theme.highlight.to_tui_color())
+                } else {
+                    Style::default().fg(app.theme.border.to_tui_color())
+                }
+            )
+            .style(Style::default().bg(app.theme.background.to_tui_color()).fg(app.theme.foreground.to_tui_color()));
 
-    f.render_stateful_widget(table, outer[1], &mut state);
+        // Render block, then render the text inside it as a Paragraph so it
+        // wraps correctly if long.
+        let inner = block.inner(*ra);
+        f.render_widget(block, *ra);
+        // Keep the text styling constant; only the block border indicates
+        // selection. This avoids inverting/highlighting the text itself.
+        let para = Paragraph::new(s.clone())
+            .style(Style::default().bg(app.theme.background.to_tui_color()).fg(app.theme.foreground.to_tui_color()))
+            .wrap(Wrap { trim: true });
+        f.render_widget(para, inner);
+    }
 }
