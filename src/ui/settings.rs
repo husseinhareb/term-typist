@@ -71,10 +71,12 @@ pub fn draw_settings<B: Backend>(f: &mut Frame<B>, app: &App, _keyboard: &Keyboa
 
     // (Removed extra placeholder convenience settings per user request.)
 
-    // Determine paging: compute available rows inside the Settings block (account for borders)
+    // Determine paging: compute available rows inside the Settings block.
+    // Use the full available area height so constraints sum to the area height
+    // and there is no leftover that gets assigned unexpectedly to the last
+    // chunk. Ensure at least 1 row is considered available.
     let area = outer[1];
-    // subtract 2 for borders/title (approx); ensure at least 1 row
-    let avail = if area.height > 2 { (area.height - 2) as usize } else { 1usize };
+    let avail = if area.height > 0 { area.height as usize } else { 1usize };
     let total = lines.len();
 
     // Clamp app.settings_cursor to valid range (draw will clamp if it's larger)
@@ -89,7 +91,6 @@ pub fn draw_settings<B: Backend>(f: &mut Frame<B>, app: &App, _keyboard: &Keyboa
     let max_offset = if total > avail { total - avail } else { 0 };
     let mut offset = if cursor < avail { 0 } else { cursor.saturating_sub(avail - 1) };
     offset = cmp::min(offset, max_offset);
-    let selected_idx = cursor.saturating_sub(offset);
 
     // Build visible rows and render each as its own bordered Block to create
     // a rectangular card for every setting. This improves readability when
@@ -103,16 +104,36 @@ pub fn draw_settings<B: Backend>(f: &mut Frame<B>, app: &App, _keyboard: &Keyboa
     // the last row taking all remaining space when using naive division.
     let mut cons: Vec<Constraint> = Vec::new();
     if visible.len() > 0 {
-        // Use the same available height we used for paging (subtract 2 for
-        // borders/title) so the constraints match the visible slice size.
-        let total_h = if area.height > 2 { (area.height - 2) as usize } else { 1usize };
+        // Compute constraints so the sum of the chunk heights equals the
+        // available area height. Distribute the integer division remainder
+        // across the top-most chunks so the layout appears balanced and
+        // responsive when the terminal is resized.
+        let total_h = area.height as usize;
         let n = visible.len();
-        // Use floor division so every row gets the same height. This may
-        // leave a small unused gap at the bottom, but guarantees identical
-        // box heights for all items which is the user's requirement.
-        let base = std::cmp::max(1, total_h / n);
-        for _ in 0..n {
-            cons.push(Constraint::Length(base as u16));
+        if n > 0 {
+            if total_h >= n {
+                // Give every visible card exactly the same height (base).
+                // Any leftover rows are appended as a spacer chunk so cards
+                // remain equal height instead of some gaining +1 row.
+                let base = total_h / n;
+                let rem = total_h - (base * n);
+                for _ in 0..n {
+                    cons.push(Constraint::Length(base as u16));
+                }
+                if rem > 0 {
+                    // Add a spacer chunk to absorb leftover rows.
+                    cons.push(Constraint::Length(rem as u16));
+                }
+            } else {
+                // This branch should not happen because visible.len() <=
+                // total_h (we slice `visible` with avail == total_h), but
+                // keep a fallback that assigns 1 row to the first
+                // `total_h` elements.
+                for i in 0..n {
+                    let h = if i < total_h { 1 } else { 0 };
+                    cons.push(Constraint::Length(h as u16));
+                }
+            }
         }
     }
     // Fallback: ensure at least one constraint so Layout::split doesn't panic
