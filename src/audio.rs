@@ -129,7 +129,7 @@ static GLOBAL_PLAYER: OnceCell<Player> = OnceCell::new();
 
 /// Initialize the global audio player (preload assets). Safe to call multiple times.
 pub fn init() {
-    let _ = GLOBAL_PLAYER.get_or_init(|| Player::new());
+    let _ = GLOBAL_PLAYER.get_or_init(Player::new);
 }
 
 /// Returns list of available switch names (directories found in assets)

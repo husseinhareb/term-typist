@@ -167,12 +167,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
 
-                if app.mode == Mode::View {
-                    if code == KeyCode::F(1) || matches!(code, KeyCode::Char(c) if c.to_ascii_lowercase() == 'm') {
-                        app.mode = Mode::Menu;
-                        app.menu_cursor = 0;
-                        continue 'main;
-                    }
+                if app.mode == Mode::View && (code == KeyCode::F(1) || matches!(code, KeyCode::Char(c) if c.eq_ignore_ascii_case(&'m'))) {
+                    app.mode = Mode::Menu;
+                    app.menu_cursor = 0;
+                    continue 'main;
                 }
 
                 // Only save the test to the DB if it was actually started (app.start.is_some()).

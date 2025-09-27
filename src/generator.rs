@@ -20,10 +20,8 @@ fn read_words() -> io::Result<Vec<String>> {
     let reader = io::BufReader::new(file);
     let mut words = Vec::new();
 
-    for line in reader.lines() {
-        if let Ok(word) = line {
-            words.push(word);
-        }
+    for word in reader.lines().map_while(Result::ok) {
+        words.push(word);
     }
 
     Ok(words)

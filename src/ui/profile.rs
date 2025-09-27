@@ -22,9 +22,6 @@ static RECENT_CURSOR: AtomicUsize = AtomicUsize::new(0);
 /// Rows per page in the Recent Tests table.
 const PAGE_SIZE: u32 = 10;
 
-/// Reset to cursor 0 (call when you open the Profile page).
-// reset_profile_page removed (not referenced elsewhere)
-
 /// Core key handler. Works for both helpers above.
 /// - Up      → newer tests (cursor -= 1, clamped at 0)
 /// - Down    → older tests (cursor += 1)
@@ -85,7 +82,7 @@ fn sep_int(mut n: u64) -> String {
     let mut out = String::new();
     let mut digits = 0usize;
     while n > 0 {
-        if digits > 0 && digits % 3 == 0 {
+        if digits > 0 && digits.is_multiple_of(3) {
             out.push(',');
         }
         out.push(char::from(b'0' + (n % 10) as u8));
@@ -125,7 +122,7 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection, theme: &The
     // one item (remove the first, append the next) rather than jumping in
     // PAGE_SIZE blocks. We choose an offset so the selected item is at
     // `selected_idx = cursor - offset` and 0 <= selected_idx < PAGE_SIZE.
-    let max_offset = if total_tests > PAGE_SIZE { total_tests - PAGE_SIZE } else { 0 };
+    let max_offset = total_tests.saturating_sub(PAGE_SIZE);
     let mut offset = if cursor < PAGE_SIZE { 0 } else { cursor.saturating_sub(PAGE_SIZE - 1) };
     offset = offset.min(max_offset);
     let selected_idx = (cursor.saturating_sub(offset)) as usize;

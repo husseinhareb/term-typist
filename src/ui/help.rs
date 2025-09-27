@@ -48,7 +48,7 @@ pub fn draw_help<B: Backend>(f: &mut Frame<B>, app: &App) {
             Style::default().fg(app.theme.title_accent.to_tui_color()).add_modifier(Modifier::BOLD),
         );
         let desc_span = Span::styled(
-            format!("{}", desc),
+            desc.to_string(),
             Style::default().fg(app.theme.foreground.to_tui_color()),
         );
         text_spans.push(Spans::from(vec![key_span, Span::raw("  "), desc_span]));

@@ -82,7 +82,7 @@ impl Keyboard {
         let row_h = if row_count > 0 { total_h / row_count } else { total_h };
         let row_h = if row_h == 0 { 1 } else { row_h };
         let used = row_h * row_count;
-        let extra = if total_h > used { total_h - used } else { 0 };
+    let extra = total_h.saturating_sub(used);
         let pad_top = extra / 2;
         let pad_bottom = extra - pad_top;
 

@@ -161,10 +161,8 @@ impl App {
             };
         }
         // Re-lock if idle > 1s
-        if let Some(_) = self.start {
-            if Instant::now().duration_since(self.last_correct) >= Duration::from_secs(1) {
-                self.locked = true;
-            }
+        if self.start.is_some() && Instant::now().duration_since(self.last_correct) >= Duration::from_secs(1) {
+            self.locked = true;
         }
     }
 

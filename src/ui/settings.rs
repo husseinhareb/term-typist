@@ -86,7 +86,7 @@ pub fn draw_settings<B: Backend>(f: &mut Frame<B>, app: &App, _keyboard: &Keyboa
     }
 
     // Compute offset so the selected item is visible and near the bottom when possible
-    let max_offset = if total > avail { total - avail } else { 0 };
+    let max_offset = total.saturating_sub(avail);
     let mut offset = if cursor < avail { 0 } else { cursor.saturating_sub(avail - 1) };
     offset = cmp::min(offset, max_offset);
 
@@ -101,7 +101,7 @@ pub fn draw_settings<B: Backend>(f: &mut Frame<B>, app: &App, _keyboard: &Keyboa
     // distribute any leftover rows across the top-most chunks. This avoids
     // the last row taking all remaining space when using naive division.
     let mut cons: Vec<Constraint> = Vec::new();
-    if visible.len() > 0 {
+    if !visible.is_empty() {
         // Compute constraints so the sum of the chunk heights equals the
         // available area height. Distribute the integer division remainder
         // across the top-most chunks so the layout appears balanced and

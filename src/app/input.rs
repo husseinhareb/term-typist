@@ -23,7 +23,7 @@ pub fn handle_nav(app: &mut App, code: KeyCode) {
         KeyCode::Char('2') => app.selected_tab = 1,
         KeyCode::Char('3') => app.selected_tab = 2,
         KeyCode::Left if app.selected_value > 0 => app.selected_value -= 1,
-        KeyCode::Right if app.current_options().len() > 0 && app.selected_value + 1 < app.current_options().len() => {
+    KeyCode::Right if !app.current_options().is_empty() && app.selected_value + 1 < app.current_options().len() => {
             app.selected_value += 1;
         }
         _ => {}

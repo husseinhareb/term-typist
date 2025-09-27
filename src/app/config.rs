@@ -56,8 +56,7 @@ pub fn read_keyboard_layout() -> io::Result<Option<String>> {
         if line.trim().starts_with("keyboard_layout") {
             let name = line
                 .split_whitespace()
-                .skip(1)
-                .next()
+                .nth(1)
                 .map(|s| s.to_string());
             return Ok(name);
         }
@@ -76,8 +75,7 @@ pub fn read_nb_of_words() -> io::Result<i32> {
         if line.trim().starts_with("nb_of_words") {
             let nb_cmds_str = line
                 .split_whitespace()
-                .skip(1)
-                .next()
+                .nth(1)
                 .ok_or_else(|| {
                     io::Error::new(io::ErrorKind::InvalidData, "Invalid format for nb_of_words")
                 })?;
@@ -144,8 +142,7 @@ pub fn read_keyboard_switch() -> io::Result<Option<String>> {
         if line.trim().starts_with("keyboard_switch") {
             let name = line
                 .split_whitespace()
-                .skip(1)
-                .next()
+                .nth(1)
                 .map(|s| s.to_string());
             return Ok(name);
         }
@@ -203,8 +200,7 @@ pub fn read_audio_enabled() -> io::Result<Option<bool>> {
         if line.trim().starts_with("audio_enabled") {
             let val = line
                 .split_whitespace()
-                .skip(1)
-                .next()
+                .nth(1)
                 .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Invalid audio_enabled"))?;
             return Ok(Some(val != "0"));
         }
@@ -271,12 +267,12 @@ pub fn read_selected_mode_value() -> io::Result<Option<(usize, usize)>> {
     for line in reader.lines() {
         let line = line?;
         if line.trim().starts_with("test_mode") {
-            if let Some(tok) = line.split_whitespace().skip(1).next() {
+            if let Some(tok) = line.split_whitespace().nth(1) {
                 if let Ok(n) = tok.parse::<usize>() { tab = Some(n); }
             }
         }
         if line.trim().starts_with("test_value") {
-            if let Some(tok) = line.split_whitespace().skip(1).next() {
+            if let Some(tok) = line.split_whitespace().nth(1) {
                 if let Ok(n) = tok.parse::<usize>() { value = Some(n); }
             }
         }
