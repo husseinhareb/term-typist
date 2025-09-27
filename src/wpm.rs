@@ -35,18 +35,14 @@ pub fn raw_wpm_from_counts(total_typed_chars: usize, elapsed_secs: f64) -> f64 {
 /// This measures the time between the first and last correct keystroke, so mistakes
 /// (incorrect keystrokes) that occur between correct ones increase the duration and
 /// therefore penalize net WPM as desired.
-pub fn net_wpm_from_correct_timestamps(correct_timestamps: &[Instant], fallback_elapsed_secs: f64) -> f64 {
+pub fn net_wpm_from_correct_timestamps(correct_timestamps: &[Instant], now: Instant) -> f64 {
     if correct_timestamps.is_empty() {
         return 0.0;
     }
-    let elapsed_secs = if correct_timestamps.len() >= 2 {
-        let first = correct_timestamps.first().unwrap();
-        let last = correct_timestamps.last().unwrap();
-        last.duration_since(*first).as_secs_f64()
-    } else {
-        // Only one correct keystroke: fall back to the overall elapsed time
-        fallback_elapsed_secs
-    };
+    // Use the time from the first correct keystroke up to `now` so the WPM
+    // keeps updating each second even if no new correct key has been typed.
+    let first = correct_timestamps.first().unwrap();
+    let elapsed_secs = now.duration_since(*first).as_secs_f64();
     if elapsed_secs <= 0.0 {
         return 0.0;
     }

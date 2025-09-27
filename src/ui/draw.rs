@@ -414,7 +414,7 @@ pub fn draw_finished<B: Backend>(f: &mut Frame<B>, app: &App) {
     let elapsed_secs = app.elapsed_secs();
     let elapsed_f = elapsed_secs as f64;
     // compute net using correct timestamps (penalizes mistakes via time gaps)
-    let net = crate::wpm::net_wpm_from_correct_timestamps(&app.correct_timestamps, elapsed_f);
+    let net = crate::wpm::net_wpm_from_correct_timestamps(&app.correct_timestamps, std::time::Instant::now());
     let acc = accuracy(app.correct_chars, app.incorrect_chars);
     let raw = crate::wpm::raw_wpm_from_counts(app.correct_chars + app.incorrect_chars, elapsed_f);
     let errs = app.incorrect_chars;

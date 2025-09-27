@@ -86,9 +86,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             if app.start.is_some() && last_wpm_update.elapsed() >= Duration::from_secs(1) {
                 let real_secs = elapsed_seconds_since_start(app.start.unwrap());
                 let idle = Instant::now().duration_since(app.last_input).as_secs_f64();
-                let effective = real_secs + idle;
+                let _effective = real_secs + idle;
                 // Raw WPM counts all typed chars as if correct
-                cached_net = crate::wpm::net_wpm_from_correct_timestamps(&app.correct_timestamps, effective);
+                cached_net = crate::wpm::net_wpm_from_correct_timestamps(&app.correct_timestamps, std::time::Instant::now());
                 cached_acc = accuracy(app.correct_chars, app.incorrect_chars);
                 last_wpm_update = Instant::now();
 

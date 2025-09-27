@@ -65,9 +65,11 @@ pub fn save_test(conn: &mut Connection, app: &App) -> Result<()> {
         .get(app.selected_value)
         .cloned()
         .unwrap_or(0) as i64;
-    let elapsed_secs = app.elapsed_secs() as f64;
-    // Net WPM based on correct keystroke timestamps (penalizes mistakes by including gaps)
-    let wpm = crate::wpm::net_wpm_from_correct_timestamps(&app.correct_timestamps, elapsed_secs);
+    let _elapsed_secs = app.elapsed_secs() as f64;
+    // Build a synthetic 'now' Instant corresponding to the end of the test so the
+    // timestamp-based net WPM measurement uses the test end time.
+    let now = if let Some(start) = app.start { start + std::time::Duration::from_secs(app.elapsed_secs()) } else { std::time::Instant::now() };
+    let wpm = crate::wpm::net_wpm_from_correct_timestamps(&app.correct_timestamps, now);
     // Accuracy unchanged: correct / total
     let acc = if app.correct_chars + app.incorrect_chars > 0 {
         (app.correct_chars as f64) / ((app.correct_chars + app.incorrect_chars) as f64) * 100.0
