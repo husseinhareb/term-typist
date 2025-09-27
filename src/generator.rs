@@ -1,7 +1,7 @@
 // src/generator.rs
 use std::fs::File;
 use std::io::{self, BufRead};
-use std::path::PathBuf;
+// PathBuf not needed here (we manipulate dirs::data_dir())
 use rand::seq::SliceRandom;
 
 /// Read the bundled word list from the XDG data directory.

@@ -25,7 +25,6 @@ use ui::draw::{ draw, draw_finished };
 use ui::keyboard::Keyboard;
 use wpm::{ accuracy, elapsed_seconds_since_start, net_wpm };
 use db::{ open, save_test };
-use theme::Theme;
 use crate::ui::profile::draw_profile;
 use crate::ui::settings::draw_settings; 
 
@@ -132,7 +131,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         // — Handle input & toggles
         let timeout = tick_rate.checked_sub(last_tick.elapsed()).unwrap_or_default();
         if event::poll(timeout)? {
-            if let Event::Key(KeyEvent { code: mut code, modifiers: mut modifiers, .. }) = event::read()? {
+                if let Event::Key(KeyEvent { code, modifiers, .. }) = event::read()? {
                 // ── SHIFT+NUMBER PANEL TOGGLES
                 match code {
                     KeyCode::Char('!') => { app.show_mode     = !app.show_mode;     continue 'main; }
@@ -376,7 +375,6 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     }
 
                     Mode::Settings => {
-                        use std::num::NonZeroUsize;
                         // Navigation keys for settings: mirror profile's behavior but operate on app.settings_cursor
                         match code {
                             KeyCode::Up | KeyCode::Char('k') => {

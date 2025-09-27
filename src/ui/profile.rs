@@ -1,7 +1,7 @@
 // src/ui/profile.rs
 
 use chrono::{DateTime, FixedOffset, Local};
-use crossterm::event::{Event, KeyCode, KeyEvent};
+use crossterm::event::KeyCode;
 use rusqlite::Connection;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tui::{
@@ -23,22 +23,7 @@ static RECENT_CURSOR: AtomicUsize = AtomicUsize::new(0);
 const PAGE_SIZE: u32 = 10;
 
 /// Reset to cursor 0 (call when you open the Profile page).
-pub fn reset_profile_page() {
-    RECENT_CURSOR.store(0, Ordering::Relaxed);
-}
-
-/// Optional convenience: call this if your event loop deals in whole Events.
-/// It will ignore non-key events.
-pub fn handle_profile_event(ev: &Event) {
-    if let Event::Key(KeyEvent { code, .. }) = ev {
-        handle_profile_key(*code);
-    }
-}
-
-/// Back-compat shim (accepts &KeyCode like your original code).
-pub fn handle_profile_scroll(key: &KeyCode) {
-    handle_profile_key(*key);
-}
+// reset_profile_page removed (not referenced elsewhere)
 
 /// Core key handler. Works for both helpers above.
 /// - Up      → newer tests (cursor -= 1, clamped at 0)

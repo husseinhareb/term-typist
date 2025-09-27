@@ -2,7 +2,7 @@
 // src/db.rs
 
 use rusqlite::{Connection, params, Result};
-use chrono::{Local, Utc};
+use chrono::Local;
 use crate::app::state::App;
 use std::{fs, path::PathBuf};
 

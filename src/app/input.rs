@@ -1,6 +1,6 @@
 // src/app/input.rs
 use crossterm::event::KeyCode;
-use crate::app::state::{App, Mode, Status};
+use crate::app::state::{App, Status};
 use crate::generator;
 
 /// Handle navigation keys to switch tabs and adjust selected values.

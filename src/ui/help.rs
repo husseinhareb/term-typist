@@ -1,6 +1,6 @@
 // src/ui/help.rs
 
-use tui::{backend::Backend, widgets::{Block, Borders, Paragraph, Wrap}, layout::{Alignment, Constraint, Direction, Layout, Rect}, style::{Style, Modifier}, text::{Span, Spans, Text}, Frame};
+use tui::{backend::Backend, widgets::{Block, Borders, Paragraph, Wrap}, layout::{Alignment, Rect}, style::{Style, Modifier}, text::{Span, Spans, Text}, Frame};
 use crate::app::state::App;
 
 pub fn draw_help<B: Backend>(f: &mut Frame<B>, app: &App) {

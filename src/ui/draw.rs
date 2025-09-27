@@ -10,7 +10,6 @@ use crate::app::state::{ App, Mode, Status };
 use crate::ui::keyboard::Keyboard;
 use crate::graph;
 use crate::wpm::{ accuracy, net_wpm };
-use crate::ui::profile::draw_profile;
 
 /// Main drawing function.
 /// - `cached_net` and `cached_acc` come from your throttled WPM/accuracy logic.

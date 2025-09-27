@@ -2,15 +2,13 @@
 
 use tui::{
     backend::Backend,
-    layout::{Constraint, Direction, Layout, Margin},
-    style::{Modifier, Style},
-    widgets::{Block, Borders, Paragraph, Wrap, Table, Row, Cell, TableState},
+    layout::{Constraint, Direction, Layout},
+    style::Style,
+    widgets::{Block, Borders, Paragraph, Wrap},
     Frame,
-    text::{Span, Spans, Text},
 };
 use crate::app::state::App;
 use crate::ui::keyboard::Keyboard;
-use crate::audio;
 use crate::themes_presets;
 use std::cmp;
 
