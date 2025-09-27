@@ -9,7 +9,7 @@ use tui::{
 use crate::app::state::{ App, Mode, Status };
 use crate::ui::keyboard::Keyboard;
 use crate::graph;
-use crate::wpm::{ accuracy, net_wpm };
+use crate::wpm::accuracy;
 
 /// Main drawing function.
 /// - `cached_net` and `cached_acc` come from your throttled WPM/accuracy logic.
@@ -413,9 +413,10 @@ pub fn draw_finished<B: Backend>(f: &mut Frame<B>, app: &App) {
     // Right: stats
     let elapsed_secs = app.elapsed_secs();
     let elapsed_f = elapsed_secs as f64;
-    let net = net_wpm(app.correct_chars, app.incorrect_chars, elapsed_f);
+    // compute net using correct timestamps (penalizes mistakes via time gaps)
+    let net = crate::wpm::net_wpm_from_correct_timestamps(&app.correct_timestamps, elapsed_f);
     let acc = accuracy(app.correct_chars, app.incorrect_chars);
-    let raw = app.correct_chars + app.incorrect_chars;
+    let raw = crate::wpm::raw_wpm_from_counts(app.correct_chars + app.incorrect_chars, elapsed_f);
     let errs = app.incorrect_chars;
     let test_type = match app.selected_tab {
         0 => format!("time {}s", app.current_options()[app.selected_value]),

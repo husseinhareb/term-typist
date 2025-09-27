@@ -39,6 +39,7 @@ pub struct App {
     pub last_input: Instant,
     pub correct_chars: usize,
     pub incorrect_chars: usize,
+    pub correct_timestamps: Vec<Instant>,
     pub last_correct: Instant,
     pub locked: bool,
     pub free_text: String,
@@ -103,6 +104,7 @@ impl App {
             last_input: now,
             correct_chars: 0,
             incorrect_chars: 0,
+            correct_timestamps: Vec::new(),
             last_correct: now,
             locked: false,
             free_text: String::new(),
@@ -151,14 +153,16 @@ impl App {
         if let Some(i) = self.status.iter().position(|&s| s == Status::Untyped) {
             let expected = self.target.chars().nth(i).unwrap();
             let correct = key == expected;
-            self.status[i] = if correct {
+            if correct {
+                self.status[i] = Status::Correct;
                 self.correct_chars += 1;
-                self.last_correct = Instant::now();
-                Status::Correct
+                let now = Instant::now();
+                self.last_correct = now;
+                self.correct_timestamps.push(now);
             } else {
+                self.status[i] = Status::Incorrect;
                 self.incorrect_chars += 1;
-                Status::Incorrect
-            };
+            }
         }
         // Re-lock if idle > 1s
         if self.start.is_some() && Instant::now().duration_since(self.last_correct) >= Duration::from_secs(1) {
@@ -180,7 +184,11 @@ impl App {
         }
         if let Some(i) = self.status.iter().rposition(|&s| s != Status::Untyped) {
             match self.status[i] {
-                Status::Correct if self.correct_chars > 0 => self.correct_chars -= 1,
+                Status::Correct if self.correct_chars > 0 => {
+                    self.correct_chars -= 1;
+                    // remove the last timestamp corresponding to the last correct char
+                    self.correct_timestamps.pop();
+                }
                 Status::Incorrect if self.incorrect_chars > 0 => self.incorrect_chars -= 1,
                 _ => {}
             }

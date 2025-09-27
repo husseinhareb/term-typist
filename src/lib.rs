@@ -23,7 +23,7 @@ use std::cmp;
 use app::input::handle_nav;
 use ui::draw::{ draw, draw_finished };
 use ui::keyboard::Keyboard;
-use wpm::{ accuracy, elapsed_seconds_since_start, net_wpm };
+use wpm::{ accuracy, elapsed_seconds_since_start };
 use db::{ open, save_test };
 use crate::ui::profile::draw_profile;
 use crate::ui::settings::draw_settings; 
@@ -87,7 +87,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 let real_secs = elapsed_seconds_since_start(app.start.unwrap());
                 let idle = Instant::now().duration_since(app.last_input).as_secs_f64();
                 let effective = real_secs + idle;
-                cached_net = net_wpm(app.correct_chars, app.incorrect_chars, effective);
+                // Raw WPM counts all typed chars as if correct
+                cached_net = crate::wpm::net_wpm_from_correct_timestamps(&app.correct_timestamps, effective);
                 cached_acc = accuracy(app.correct_chars, app.incorrect_chars);
                 last_wpm_update = Instant::now();
 

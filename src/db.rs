@@ -65,12 +65,12 @@ pub fn save_test(conn: &mut Connection, app: &App) -> Result<()> {
         .get(app.selected_value)
         .cloned()
         .unwrap_or(0) as i64;
-    let diff = (app.correct_chars as i64) - (app.incorrect_chars as i64);
-    let wpm = if duration_ms>0 {
-        (diff.max(0) as f64)/5.0 / (duration_ms as f64/60000.0)
-    } else { 0.0 };
-    let acc = if app.correct_chars+app.incorrect_chars>0 {
-        (app.correct_chars as f64)/( (app.correct_chars+app.incorrect_chars) as f64 )*100.0
+    let elapsed_secs = app.elapsed_secs() as f64;
+    // Net WPM based on correct keystroke timestamps (penalizes mistakes by including gaps)
+    let wpm = crate::wpm::net_wpm_from_correct_timestamps(&app.correct_timestamps, elapsed_secs);
+    // Accuracy unchanged: correct / total
+    let acc = if app.correct_chars + app.incorrect_chars > 0 {
+        (app.correct_chars as f64) / ((app.correct_chars + app.incorrect_chars) as f64) * 100.0
     } else { 100.0 };
 
     let tx = conn.transaction()?;
