@@ -14,6 +14,7 @@ mod graph;     // src/graph.rs
 mod wpm;       // src/wpm.rs
 mod generator; // src/generator.rs
 mod db;        // src/db.rs
+mod caps;      // src/caps.rs (platform helpers)
 mod theme;     // src/theme.rs
 pub mod themes_presets; // src/themes_presets.rs (predefined themes)
 mod audio;     // src/audio.rs
@@ -76,11 +77,22 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         a
     };
     let mut app = make_app();
+    // Initialize caps lock state from system if possible
+    app.caps_detection_available = caps::detection_available();
+    app.caps_lock_on = if app.caps_detection_available { caps::is_caps_lock_on() } else { false };
+    // Show a one-time startup hint when detection isn't available so users know to use F12
+    app.show_caps_startup_hint = !app.caps_detection_available;
     let mut keyboard = Keyboard::new();
     // Initialize audio playback (background thread/stream)
     audio::init();
 
     'main: loop {
+        // Poll OS Caps Lock state (best-effort) each tick to support toggles
+        let os_caps = caps::is_caps_lock_on();
+        if os_caps != app.caps_lock_on {
+            app.caps_lock_on = os_caps;
+        }
+        // No timeout anymore: we show the modal whenever caps_lock_on is true.
         // — Throttle WPM/accuracy updates once per second
         if let Mode::Insert = app.mode {
             if app.start.is_some() && last_wpm_update.elapsed() >= Duration::from_secs(1) {
@@ -127,14 +139,70 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     draw(f, &app, &keyboard, cached_net, cached_acc);
                 }
             }
+
+            // Global overlay: Caps Lock modal (always show when caps_lock_on is true)
+            if app.caps_lock_on {
+                    let area = f.size();
+                    let label = "🔒  Caps Lock";
+                    let content_width = (label.chars().count() as u16) + 6; // padding + borders
+                    let w = content_width.min(area.width.saturating_sub(2)).max(16);
+                    let h = 3u16;
+                    let x = (area.width.saturating_sub(w)) / 2;
+                    let y = (area.height.saturating_sub(h)) / 2;
+                    let rect = tui::layout::Rect::new(x, y, w, h);
+
+                    // Use accent background for visibility and contrasting foreground.
+                    let block = tui::widgets::Block::default()
+                        .borders(tui::widgets::Borders::ALL)
+                        .style(Style::default().bg(app.theme.title_accent.to_tui_color()).fg(app.theme.background.to_tui_color()));
+                    f.render_widget(block.clone(), rect);
+                    let inner = block.inner(rect);
+                    let para = tui::widgets::Paragraph::new(tui::text::Spans::from(vec![tui::text::Span::raw(label)])).style(Style::default().fg(app.theme.background.to_tui_color()));
+                    f.render_widget(para, inner);
+            }
+
+            // If detection isn't available, show a small one-time hint to the user
+            if app.show_caps_startup_hint {
+                let area = f.size();
+                let label = "Press F12 or 'L' to test Caps Lock";
+                let content_width = (label.chars().count() as u16) + 6;
+                let w = content_width.min(area.width.saturating_sub(2)).max(20);
+                let h = 3u16;
+                let x = (area.width.saturating_sub(w)) / 2;
+                let y = (area.height.saturating_sub(h)) / 2 + 4; // slightly below center
+                let rect = tui::layout::Rect::new(x, y, w, h);
+                let block = tui::widgets::Block::default()
+                    .borders(tui::widgets::Borders::ALL)
+                    .style(Style::default().bg(app.theme.background.to_tui_color()).fg(app.theme.foreground.to_tui_color()));
+                f.render_widget(block.clone(), rect);
+                let inner = block.inner(rect);
+                let para = tui::widgets::Paragraph::new(tui::text::Spans::from(vec![tui::text::Span::raw(label)])).style(Style::default().fg(app.theme.foreground.to_tui_color()));
+                f.render_widget(para, inner);
+            }
         })?;
 
         // — Handle input & toggles
         let timeout = tick_rate.checked_sub(last_tick.elapsed()).unwrap_or_default();
         if event::poll(timeout)? {
                 if let Event::Key(KeyEvent { code, modifiers, .. }) = event::read()? {
+                    // If the one-time startup hint is visible, allow 'l' to toggle the Caps modal
+                    // (useful in terminals that don't forward F12). Then dismiss the hint.
+                    if app.show_caps_startup_hint {
+                        if code == KeyCode::Char('l') {
+                            app.caps_lock_on = !app.caps_lock_on;
+                            app.show_caps_startup_hint = false;
+                            continue 'main;
+                        }
+                        // any other key dismisses the hint
+                        app.show_caps_startup_hint = false;
+                    }
                 // ── SHIFT+NUMBER PANEL TOGGLES
                 match code {
+                    // Ctrl+Alt+C toggles Caps modal (fallback for terminals that don't report F-keys)
+                    KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) && modifiers.contains(KeyModifiers::ALT) => { app.caps_lock_on = !app.caps_lock_on; continue 'main; }
+                    KeyCode::F(12) => { app.caps_lock_on = !app.caps_lock_on; continue 'main; }
+                    // If the terminal reports an explicit CapsLock key press, toggle the flag
+                    KeyCode::CapsLock => { app.caps_lock_on = !app.caps_lock_on; continue 'main; }
                     KeyCode::Char('!') => { app.show_mode     = !app.show_mode;     continue 'main; }
                     KeyCode::Char('@') => { app.show_value    = !app.show_value;    continue 'main; }
                     KeyCode::Char('#') => { app.show_state    = !app.show_state;    continue 'main; }
@@ -166,6 +234,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                         app.menu_cursor = 0;
                         continue 'main;
                     }
+                    // update last_tick so poll timeout stays in sync
+                    last_tick = Instant::now();
                 }
 
                 if app.mode == Mode::View && (code == KeyCode::F(1) || matches!(code, KeyCode::Char(c) if c.eq_ignore_ascii_case(&'m'))) {
@@ -225,6 +295,13 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 // ── 'p' opens Profile, 's' opens Settings (accept upper/lower case)
                 if let KeyCode::Char(c) = code {
                     let lc = c.to_ascii_lowercase();
+                    // Heuristic: uppercase letter without SHIFT => CapsLock likely ON
+                    if c.is_ascii_alphabetic() && c.is_ascii_uppercase() && !modifiers.contains(KeyModifiers::SHIFT) {
+                        app.caps_lock_on = true;
+                    } else if c.is_ascii_alphabetic() && c.is_ascii_lowercase() && !modifiers.contains(KeyModifiers::SHIFT) {
+                        // typing lowercase without SHIFT suggests CapsLock OFF
+                        app.caps_lock_on = false;
+                    }
                     if lc == 'p' && app.mode == Mode::View {
                         app.mode = Mode::Profile;
                         continue 'main;

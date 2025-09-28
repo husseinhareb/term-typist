@@ -64,6 +64,12 @@ pub struct App {
     pub settings_cursor: usize,
     // Cursor for popup menu
     pub menu_cursor: usize,
+    // Persistent Caps Lock state (best-effort heuristic in terminal environments)
+    pub caps_lock_on: bool,
+    // True when the platform provides a system-backed method to detect CapsLock
+    pub caps_detection_available: bool,
+    // Show a one-time hint at startup if detection is not available (so user knows to use F12)
+    pub show_caps_startup_hint: bool,
 }
 
 impl App {
@@ -126,6 +132,9 @@ impl App {
             theme: Theme::load(),
             settings_cursor: 0,
             menu_cursor: 0,
+            caps_lock_on: false,
+            caps_detection_available: false,
+            show_caps_startup_hint: false,
         }
     }
 

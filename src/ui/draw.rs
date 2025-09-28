@@ -397,6 +397,8 @@ pub fn draw<B: Backend>(
     // 3) Draw the keyboard inside the inner rect
     keyboard.draw(f, inner, &app.theme, app.keyboard_layout);
     }
+
+    // Caps Lock modal overlay is rendered from lib.rs after screen-specific drawing.
 }
 
 /// Draw the “finished” summary: left = WPM chart, right = stats.
