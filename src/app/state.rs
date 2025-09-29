@@ -68,8 +68,6 @@ pub struct App {
     pub caps_lock_on: bool,
     // True when the platform provides a system-backed method to detect CapsLock
     pub caps_detection_available: bool,
-    // Show a one-time hint at startup if detection is not available (so user knows to use F12)
-    pub show_caps_startup_hint: bool,
 }
 
 impl App {
@@ -134,7 +132,6 @@ impl App {
             menu_cursor: 0,
             caps_lock_on: false,
             caps_detection_available: false,
-            show_caps_startup_hint: false,
         }
     }
 

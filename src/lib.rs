@@ -80,8 +80,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize caps lock state from system if possible
     app.caps_detection_available = caps::detection_available();
     app.caps_lock_on = if app.caps_detection_available { caps::is_caps_lock_on() } else { false };
-    // Show a one-time startup hint when detection isn't available so users know to use F12
-    app.show_caps_startup_hint = !app.caps_detection_available;
+    // No startup hint; Caps Lock state is driven by system detection or heuristics.
     let mut keyboard = Keyboard::new();
     // Initialize audio playback (background thread/stream)
     audio::init();
@@ -161,46 +160,17 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     f.render_widget(para, inner);
             }
 
-            // If detection isn't available, show a small one-time hint to the user
-            if app.show_caps_startup_hint {
-                let area = f.size();
-                let label = "Press F12 or 'L' to test Caps Lock";
-                let content_width = (label.chars().count() as u16) + 6;
-                let w = content_width.min(area.width.saturating_sub(2)).max(20);
-                let h = 3u16;
-                let x = (area.width.saturating_sub(w)) / 2;
-                let y = (area.height.saturating_sub(h)) / 2 + 4; // slightly below center
-                let rect = tui::layout::Rect::new(x, y, w, h);
-                let block = tui::widgets::Block::default()
-                    .borders(tui::widgets::Borders::ALL)
-                    .style(Style::default().bg(app.theme.background.to_tui_color()).fg(app.theme.foreground.to_tui_color()));
-                f.render_widget(block.clone(), rect);
-                let inner = block.inner(rect);
-                let para = tui::widgets::Paragraph::new(tui::text::Spans::from(vec![tui::text::Span::raw(label)])).style(Style::default().fg(app.theme.foreground.to_tui_color()));
-                f.render_widget(para, inner);
-            }
+            // (No startup test hint is shown; Caps Lock is driven by system detection,
+            // terminal-reported CapsLock key, or heuristics.)
         })?;
 
         // — Handle input & toggles
         let timeout = tick_rate.checked_sub(last_tick.elapsed()).unwrap_or_default();
         if event::poll(timeout)? {
                 if let Event::Key(KeyEvent { code, modifiers, .. }) = event::read()? {
-                    // If the one-time startup hint is visible, allow 'l' to toggle the Caps modal
-                    // (useful in terminals that don't forward F12). Then dismiss the hint.
-                    if app.show_caps_startup_hint {
-                        if code == KeyCode::Char('l') {
-                            app.caps_lock_on = !app.caps_lock_on;
-                            app.show_caps_startup_hint = false;
-                            continue 'main;
-                        }
-                        // any other key dismisses the hint
-                        app.show_caps_startup_hint = false;
-                    }
                 // ── SHIFT+NUMBER PANEL TOGGLES
                 match code {
-                    // Ctrl+Alt+C toggles Caps modal (fallback for terminals that don't report F-keys)
-                    KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) && modifiers.contains(KeyModifiers::ALT) => { app.caps_lock_on = !app.caps_lock_on; continue 'main; }
-                    KeyCode::F(12) => { app.caps_lock_on = !app.caps_lock_on; continue 'main; }
+                    // Only toggle CapsLock state if the terminal reports an actual CapsLock key press
                     // If the terminal reports an explicit CapsLock key press, toggle the flag
                     KeyCode::CapsLock => { app.caps_lock_on = !app.caps_lock_on; continue 'main; }
                     KeyCode::Char('!') => { app.show_mode     = !app.show_mode;     continue 'main; }
