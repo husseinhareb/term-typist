@@ -286,8 +286,23 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 match app.mode {
                     Mode::Menu => {
                         match code {
-                            KeyCode::Up | KeyCode::Char('k') => { if app.menu_cursor>0 { app.menu_cursor -= 1 }; continue 'main; }
-                            KeyCode::Down | KeyCode::Char('j') => { app.menu_cursor = app.menu_cursor.saturating_add(1); continue 'main; }
+                            // Wrap-around navigation: moving up from the first item goes to the last,
+                            // moving down from the last item goes to the first. Keep the total
+                            // in sync with the menu labels in `src/ui/menu.rs` (3 items).
+                            KeyCode::Up | KeyCode::Char('k') => {
+                                let total = 3usize;
+                                if total > 0 {
+                                    app.menu_cursor = if app.menu_cursor == 0 { total - 1 } else { app.menu_cursor - 1 };
+                                }
+                                continue 'main;
+                            }
+                            KeyCode::Down | KeyCode::Char('j') => {
+                                let total = 3usize;
+                                if total > 0 {
+                                    app.menu_cursor = (app.menu_cursor + 1) % total;
+                                }
+                                continue 'main;
+                            }
                             KeyCode::Enter => {
                                 match app.menu_cursor {
                                     0 => { app.mode = Mode::Settings; app.menu_cursor = 0; }
