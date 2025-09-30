@@ -426,29 +426,56 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection, theme: &The
         .constraints([Constraint::Min(3), Constraint::Length(8)])
         .split(chunks[2]);
 
-    // WPM-over-time chart (chronological by started_at)
-    // NOTE: the DB stores epoch seconds; plotting raw epoch values makes the
-    // numeric x-axis huge (e.g. 1_7e9). Convert to relative seconds since the
-    // first timestamp in the window so the chart shows elapsed time instead.
-    let raw_data: Vec<(u64, f64)> = conn
+    // WPM-over-time chart: fetch all samples and build a timeline in *cumulative
+    // active typing seconds* rather than wall-clock time. This removes large
+    // gaps of inactivity between tests and makes the X axis represent how much
+    // time the user actually spent typing.
+    let mut stmt = conn
         .prepare(
-            "SELECT CAST(strftime('%s', started_at) AS INTEGER) AS ts, wpm
-               FROM tests
-              WHERE started_at >= datetime('now','-365 days')
-              ORDER BY ts ASC",
+            "SELECT t.id AS test_id, CAST(strftime('%s', t.started_at) AS INTEGER) AS ts, s.elapsed_s, s.wpm
+               FROM tests t
+         LEFT JOIN samples s ON s.test_id = t.id
+              WHERE t.started_at >= datetime('now','-365 days')
+              ORDER BY ts ASC, s.elapsed_s ASC",
         )
-        .unwrap()
-        .query_map([], |r| Ok((r.get::<_, i64>(0)? as u64, r.get(1)?)))
+        .unwrap();
+
+    // Collect owned rows so we don't borrow the prepared statement across the iterator
+    let samples_rows: Vec<(u64, u64, f64)> = stmt
+        .query_map([], |r| {
+            Ok((
+                r.get::<_, i64>(0)? as u64,
+                r.get::<_, i64>(2)? as u64,
+                r.get::<_, f64>(3)?,
+            ))
+        })
         .unwrap()
         .filter_map(Result::ok)
         .collect();
 
-    let data: Vec<(u64, f64)> = if raw_data.is_empty() {
-        raw_data
-    } else {
-        let min_ts = raw_data.first().unwrap().0;
-        raw_data.into_iter().map(|(t, w)| (t.saturating_sub(min_ts), w)).collect()
-    };
+    let mut data: Vec<(u64, f64)> = Vec::new();
+    let mut cumulative: u64 = 0;
+    let mut last_test_id: Option<u64> = None;
+    let mut last_elapsed_in_test: u64 = 0;
+
+    for (test_id, elapsed_s, wpm) in samples_rows.into_iter() {
+        // New test boundary: add the duration of the previous test to cumulative
+        if let Some(last_id) = last_test_id {
+            if last_id != test_id {
+                cumulative = cumulative.saturating_add(last_elapsed_in_test);
+                last_elapsed_in_test = 0;
+            }
+        }
+        last_test_id = Some(test_id);
+
+        // If there is no samples row (elapsed_s == 0 possible), still push point
+        let x = cumulative.saturating_add(elapsed_s);
+        data.push((x, wpm));
+
+        if elapsed_s > last_elapsed_in_test {
+            last_elapsed_in_test = elapsed_s;
+        }
+    }
 
     graph::draw_wpm_chart(f, bottom[0], &data, theme);
 

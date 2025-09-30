@@ -1,5 +1,5 @@
 use std::cmp;
-use tui::{backend::Backend, widgets::{Block, Borders, Paragraph, List, ListItem, ListState}, layout::Rect, style::{Style, Modifier, Color}, Frame};
+use tui::{backend::Backend, widgets::{Block, Borders, Paragraph}, layout::Rect, style::{Style, Modifier, Color}, Frame};
 use crate::app::state::App;
 
 pub fn draw_menu<B: Backend>(f: &mut Frame<B>, app: &App) {
@@ -7,8 +7,7 @@ pub fn draw_menu<B: Backend>(f: &mut Frame<B>, app: &App) {
 
                 // Small centered modal (not a full-page menu). We deliberately keep this
                 // compact so it overlays the current UI without replacing it.
-        let labels = ["Settings", "Help", "Quit"];
-        let items: Vec<ListItem> = labels.iter().map(|&s| ListItem::new(s)).collect();
+    let labels = ["Settings", "Help", "Quit"];
 
                 // Compute a compact modal size based on longest item + padding.
                 let padding_h = 4u16; // left/right padding
@@ -17,47 +16,15 @@ pub fn draw_menu<B: Backend>(f: &mut Frame<B>, app: &App) {
                 let w_calc = longest + padding_h * 2 + 2; // content + padding + borders
                 let max_w = area.width.saturating_sub(10);
                 let w = cmp::min(w_calc, max_w).max(12);
-                let h = (items.len() as u16) + padding_v * 2 + 2; // items + padding + border
+                let h = (labels.len() as u16) + padding_v * 2 + 2; // items + padding + border
 
                 let x = (area.width.saturating_sub(w)) / 2;
                 let y = (area.height.saturating_sub(h)) / 2;
                 let rect = Rect::new(x, y, w, h);
 
-    // Render a dim overlay only on the regions outside the centered menu rect
-    // so the menu area itself remains untouched and the UI underneath appears
-    // "transparent" (terminals don't support true alpha blending).
-    let overlay_style = Style::default().bg(Color::Indexed(236));
-
-    // top area
-    if y > 0 {
-        let top = Rect::new(0, 0, area.width, y);
-        let overlay = Paragraph::new("").style(overlay_style);
-        f.render_widget(overlay, top);
-    }
-
-    // bottom area
-    if y + h < area.height {
-        let bottom = Rect::new(0, y + h, area.width, area.height - (y + h));
-        let overlay = Paragraph::new("").style(overlay_style);
-        f.render_widget(overlay, bottom);
-    }
-
-    // left area (between top and bottom)
-    if x > 0 {
-        let left = Rect::new(0, y, x, h);
-        let overlay = Paragraph::new("").style(overlay_style);
-        f.render_widget(overlay, left);
-    }
-
-    // right area
-    if x + w < area.width {
-        let right = Rect::new(x + w, y, area.width - (x + w), h);
-        let overlay = Paragraph::new("").style(overlay_style);
-        f.render_widget(overlay, right);
-    }
-
-    let mut state = ListState::default();
-    state.select(Some(app.menu_cursor.min(items.len().saturating_sub(1))));
+    // NOTE: intentionally do not draw any dim overlay around the modal so the
+    // underlying UI remains fully visible; we only draw the bordered modal
+    // and the centered labels on top.
 
     // Render small modal as a bordered box with transparent interior so the
     // underlying UI remains visible. We intentionally do not draw a shadow
@@ -66,16 +33,43 @@ pub fn draw_menu<B: Backend>(f: &mut Frame<B>, app: &App) {
         .borders(Borders::ALL)
         // Transparent background; border colored with accent so the box is visible
         .style(Style::default().bg(Color::Reset).fg(app.theme.title_accent.to_tui_color()));
+    // Draw only the border (modal_block) so we don't fill the interior and
+    // therefore preserve the underlying UI pixels where we don't draw text.
     f.render_widget(modal_block.clone(), rect);
 
-    // Render the items inside the modal without filling background
+    // Render each menu label as a single-line Paragraph centered inside the
+    // inner rect. We avoid rendering full-width widgets (which would overwrite
+    // the background) and instead draw only the characters of each label so the
+    // underlying UI stays visible around them.
     let inner = modal_block.inner(rect);
-    let list_area = Rect::new(inner.x + 1, inner.y + 1, inner.width.saturating_sub(2), inner.height.saturating_sub(2));
+    // compute vertical start for items (top padding)
+    let start_y = inner.y.saturating_add(padding_v);
 
-    let list = List::new(items)
-        .block(Block::default())
-        .style(Style::default().fg(app.theme.foreground.to_tui_color()).bg(Color::Reset))
-        .highlight_style(Style::default().fg(app.theme.highlight.to_tui_color()).add_modifier(Modifier::BOLD));
+    for (i, &label) in labels.iter().enumerate() {
+        let item_y = start_y.saturating_add(i as u16);
+        if item_y >= inner.y.saturating_add(inner.height) { break; }
 
-    f.render_stateful_widget(list, list_area, &mut state);
+        // center the label horizontally within inner
+        let label_w = label.len() as u16;
+        let x_off = if inner.width > label_w { (inner.width - label_w) / 2 } else { 0 };
+        let item_x = inner.x.saturating_add(x_off);
+
+        // clamp width so we never overflow
+        let item_w = cmp::min(label_w, inner.width);
+        if item_w == 0 { continue; }
+
+        let item_rect = Rect::new(item_x, item_y, item_w, 1);
+
+        let is_selected = (i == app.menu_cursor) || (app.menu_cursor > labels.len().saturating_sub(1) && i == 0);
+        let style = if is_selected {
+            // Highlight with accent foreground and bold — avoid drawing a filled
+            // background so the underlying UI remains visible around the label.
+            Style::default().fg(app.theme.highlight.to_tui_color()).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(app.theme.foreground.to_tui_color())
+        };
+
+        let para = Paragraph::new(label).style(style).alignment(tui::layout::Alignment::Center);
+        f.render_widget(para, item_rect);
+    }
 }

@@ -27,18 +27,39 @@ pub fn draw_wpm_chart<B: Backend>(f: &mut Frame<B>, area: Rect, data: &[(u64, f6
         .style(Style::default().fg(theme.chart_line.to_tui_color()))
         .data(&pts);
 
-    // Generate axis labels at min, mid, max
+    // Helper to format seconds into a human-friendly label (s, XmYs, or X.Xh)
+    fn fmt_time_label(secs: f64) -> String {
+        if secs.is_nan() || !secs.is_finite() || secs <= 0.0 {
+            return "0s".to_string();
+        }
+        if secs >= 3600.0 {
+            // show hours with one decimal
+            format!("{:.1}h", secs / 3600.0)
+        } else if secs >= 60.0 {
+            let mins = (secs / 60.0).floor() as u64;
+            let s = (secs % 60.0).round() as u64;
+            if s == 0 {
+                format!("{}m", mins)
+            } else {
+                format!("{}m{}s", mins, s)
+            }
+        } else {
+            format!("{}s", secs.round() as u64)
+        }
+    }
+
+    // Generate axis labels at min, mid, max using friendly time units
     let x_labels = vec![
         Span::styled(
-            "0",
+            fmt_time_label(0.0),
             Style::default().fg(theme.chart_axis.to_tui_color()).add_modifier(Modifier::BOLD),
         ),
         Span::styled(
-            format!("{}", (max_t / 2.0).round()),
+            fmt_time_label(max_t / 2.0),
             Style::default().fg(theme.chart_axis.to_tui_color()),
         ),
         Span::styled(
-            format!("{}", max_t.round()),
+            fmt_time_label(max_t),
             Style::default().fg(theme.chart_axis.to_tui_color()).add_modifier(Modifier::BOLD),
         ),
     ];
