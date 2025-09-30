@@ -3,6 +3,7 @@
 use tui::{
     backend::Backend,
     layout::{Constraint, Direction, Layout},
+    text::Span,
     style::Style,
     widgets::{Block, Borders, Paragraph, Wrap},
     Frame,
@@ -29,15 +30,15 @@ pub fn draw_settings<B: Backend>(f: &mut Frame<B>, app: &App, _keyboard: &Keyboa
         .style(Style::default().bg(app.theme.background.to_tui_color()).fg(app.theme.foreground.to_tui_color()));
     f.render_widget(title, outer[0]);
 
-    // Build a list of logical settings lines (strings) so we can slice them for paging
-    let mut lines: Vec<String> = Vec::new();
-    lines.push(format!("Show mode panel: {}", if app.show_mode { "On" } else { "Off" }));
-    lines.push(format!("Show value panel: {}", if app.show_value { "On" } else { "Off" }));
-    lines.push(format!("Show state panel: {}", if app.show_state { "On" } else { "Off" }));
-    lines.push(format!("Show WPM/speed: {}", if app.show_speed { "On" } else { "Off" }));
-    lines.push(format!("Show timer: {}", if app.show_timer { "On" } else { "Off" }));
-    lines.push(format!("Show text area: {}", if app.show_text { "On" } else { "Off" }));
-    lines.push(format!("Show on-screen keyboard: {}", if app.show_keyboard { "On" } else { "Off" }));
+    // Build a structured list of (label, value) pairs for nicer rendering
+    let mut items: Vec<(String, String)> = Vec::new();
+    items.push(("Show mode panel".into(), if app.show_mode { "On".into() } else { "Off".into() }));
+    items.push(("Show value panel".into(), if app.show_value { "On".into() } else { "Off".into() }));
+    items.push(("Show state panel".into(), if app.show_state { "On".into() } else { "Off".into() }));
+    items.push(("Show WPM/speed".into(), if app.show_speed { "On".into() } else { "Off".into() }));
+    items.push(("Show timer".into(), if app.show_timer { "On".into() } else { "Off".into() }));
+    items.push(("Show text area".into(), if app.show_text { "On".into() } else { "Off".into() }));
+    items.push(("Show on-screen keyboard".into(), if app.show_keyboard { "On".into() } else { "Off".into() }));
 
     let layout_label = match app.keyboard_layout {
         crate::app::state::KeyboardLayout::Qwerty => "QWERTY",
@@ -45,7 +46,7 @@ pub fn draw_settings<B: Backend>(f: &mut Frame<B>, app: &App, _keyboard: &Keyboa
         crate::app::state::KeyboardLayout::Dvorak => "DVORAK",
         crate::app::state::KeyboardLayout::Qwertz => "QWERTZ",
     };
-    lines.push(format!("Keyboard layout: <<{}>>", layout_label));
+    items.push(("Keyboard layout".into(), format!("<<{}>>", layout_label)));
 
     // Theme
     let theme_names = themes_presets::preset_names();
@@ -58,14 +59,12 @@ pub fn draw_settings<B: Backend>(f: &mut Frame<B>, app: &App, _keyboard: &Keyboa
             }
         }
     }
-    lines.push(format!("Theme: <<{}>>", cur_theme_name));
+    items.push(("Theme".into(), format!("<<{}>>", cur_theme_name)));
 
+    // Keyboard switch (audio)
+    items.push(("Keyboard switch".into(), format!("<<{}>>", app.keyboard_switch)));
     // Audio
-    // Keyboard switch selection (audio sample set used for key sounds)
-    lines.push(format!("Keyboard switch: <<{}>>", app.keyboard_switch));
-
-    // Audio
-    lines.push(format!("Audio enabled: {}  (press 'a' to toggle)", if app.audio_enabled { "On" } else { "Off" }));
+    items.push(("Audio enabled".into(), if app.audio_enabled { "On (press 'a')".into() } else { "Off (press 'a')".into() }));
 
     // (Removed extra placeholder convenience settings per user request.)
 
@@ -75,7 +74,7 @@ pub fn draw_settings<B: Backend>(f: &mut Frame<B>, app: &App, _keyboard: &Keyboa
     // chunk. Ensure at least 1 row is considered available.
     let area = outer[1];
     let avail = if area.height > 0 { area.height as usize } else { 1usize };
-    let total = lines.len();
+    let total = items.len();
 
     // Clamp app.settings_cursor to valid range (draw will clamp if it's larger)
     let mut cursor = app.settings_cursor;
@@ -94,7 +93,7 @@ pub fn draw_settings<B: Backend>(f: &mut Frame<B>, app: &App, _keyboard: &Keyboa
     // a rectangular card for every setting. This improves readability when
     // there are only a few settings on the page.
     let end = cmp::min(offset + avail, total);
-    let visible = &lines[offset..end];
+    let visible = &items[offset..end];
 
     // Create vertical layout with one chunk per visible line.
     // Compute integer division so heights sum to <= area.height and then
@@ -143,33 +142,43 @@ pub fn draw_settings<B: Backend>(f: &mut Frame<B>, app: &App, _keyboard: &Keyboa
         .direction(Direction::Vertical)
         .constraints(cons.as_slice())
         .split(outer[1]);
-
-    for (i, (s, ra)) in visible.iter().zip(rows_area.iter()).enumerate() {
+    for (i, ((label, value), ra)) in visible.iter().zip(rows_area.iter()).enumerate() {
         let idx = offset + i;
         let selected = idx == cursor;
-        // Each setting is rendered inside a bordered block. We don't set a
-        // title text here because the setting's content is displayed inside
-        // the block; highlight is expressed via the border color only.
+
+        // Card block with accent border when selected
         let block = Block::default()
             .borders(Borders::ALL)
-            .border_style(
-                if selected {
-                    Style::default().fg(app.theme.highlight.to_tui_color())
-                } else {
-                    Style::default().fg(app.theme.border.to_tui_color())
-                }
-            )
+            .border_style(if selected {
+                Style::default().fg(app.theme.highlight.to_tui_color())
+            } else {
+                Style::default().fg(app.theme.border.to_tui_color())
+            })
             .style(Style::default().bg(app.theme.background.to_tui_color()).fg(app.theme.foreground.to_tui_color()));
 
-        // Render block, then render the text inside it as a Paragraph so it
-        // wraps correctly if long.
         let inner = block.inner(*ra);
         f.render_widget(block, *ra);
-        // Keep the text styling constant; only the block border indicates
-        // selection. This avoids inverting/highlighting the text itself.
-        let para = Paragraph::new(s.clone())
-            .style(Style::default().bg(app.theme.background.to_tui_color()).fg(app.theme.foreground.to_tui_color()))
+
+        // Split inner into two columns: label (60%) and value (40%)
+        let cols = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
+            .split(inner);
+
+        // Left: label, smaller/muted color
+        let lbl = Paragraph::new(Span::styled(label.clone(), Style::default().fg(app.theme.stats_label.to_tui_color())))
             .wrap(Wrap { trim: true });
-        f.render_widget(para, inner);
+        f.render_widget(lbl, cols[0]);
+
+        // Right: value, highlighted; add a pointer when selected
+        let val_text = if selected {
+            format!("▶ {}", value)
+        } else {
+            value.clone()
+        };
+        let val = Paragraph::new(Span::styled(val_text, Style::default().fg(app.theme.stats_value.to_tui_color()).add_modifier(tui::style::Modifier::BOLD)))
+            .alignment(tui::layout::Alignment::Right)
+            .wrap(Wrap { trim: true });
+        f.render_widget(val, cols[1]);
     }
 }
