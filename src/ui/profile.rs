@@ -203,7 +203,8 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection, theme: &The
              )",
         )
         .unwrap();
-    let h_cons: f64 = hcons.query_row([], |r| r.get(0)).unwrap_or(0.0);
+         let mut h_cons: f64 = hcons.query_row([], |r| r.get(0)).unwrap_or(0.0);
+         if !h_cons.is_finite() || h_cons < 0.0 { h_cons = 0.0; }
 
     let mut avgcons = conn
         .prepare(
@@ -214,7 +215,9 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection, theme: &The
              )",
         )
         .unwrap();
-    let avg_cons: f64 = avgcons.query_row([], |r| r.get(0)).unwrap_or(0.0);
+         let mut avg_cons: f64 = avgcons.query_row([], |r| r.get(0)).unwrap_or(0.0);
+         if !avg_cons.is_finite() || avg_cons < 0.0 { avg_cons = 0.0; }
+
 
     // Last-10 summary (safe consistency and raw)
     let mut last10 = conn
@@ -297,11 +300,11 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection, theme: &The
             Style::default().fg(theme.stats_label.to_tui_color()),
         )),
         Spans::from(Span::styled(format!("{:.0}%", h_acc), Style::default().fg(theme.foreground.to_tui_color()))),
-        Spans::from(Span::styled(
-            "highest consistency",
-            Style::default().fg(theme.stats_label.to_tui_color()),
-        )),
-        Spans::from(Span::styled(format!("{:.0}%", h_cons), Style::default().fg(theme.foreground.to_tui_color()))),
+        Spans::from(vec![
+            Span::styled("highest consistency", Style::default().fg(theme.stats_label.to_tui_color())),
+            Span::raw("   "),
+            Span::styled(format!("{:.0}%", h_cons), Style::default().fg(theme.stats_value.to_tui_color()).add_modifier(tui::style::Modifier::BOLD)),
+        ]),
     ])
     .block(Block::default().borders(Borders::ALL).title(" Summary ").border_style(Style::default().fg(theme.border.to_tui_color())).style(Style::default().bg(theme.background.to_tui_color()).fg(theme.foreground.to_tui_color())));
     f.render_widget(left, cols[0]);
