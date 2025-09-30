@@ -50,21 +50,6 @@ pub fn net_wpm_from_correct_timestamps_window(
     (correct / 5.0) / minutes
 }
 
-/// Legacy wrapper: keep original signature for backward compatibility.
-/// Deprecated — callers should pass the test `start` and `end` to the windowed function
-/// (use `net_wpm_from_correct_timestamps_window`) so net and raw use the same denominator.
-///
-/// This wrapper preserves the previous behavior (using first correct keystroke as the start)
-/// to avoid an immediate break; please update call sites to use the windowed function.
-#[deprecated(note = "use net_wpm_from_correct_timestamps_window(correct_timestamps, start, end)")]
-pub fn net_wpm_from_correct_timestamps(correct_timestamps: &[Instant], now: Instant) -> f64 {
-    if correct_timestamps.is_empty() {
-        return 0.0;
-    }
-    let first = correct_timestamps.first().unwrap();
-    net_wpm_from_correct_timestamps_window(correct_timestamps, *first, now)
-}
-
 /// Accuracy percentage: correct_chars ÷ (correct_chars + incorrect_chars) × 100.
 pub fn accuracy(correct_chars: usize, incorrect_chars: usize) -> f64 {
     let total = correct_chars + incorrect_chars;

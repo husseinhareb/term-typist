@@ -518,7 +518,7 @@ pub fn draw_finished<B: Backend>(f: &mut Frame<B>, app: &App) {
                 Style::default().fg(app.theme.stats_label.to_tui_color()),
             ),
             Span::styled(
-                raw.to_string(),
+                format!("{:.0}", raw),
                 Style::default().fg(app.theme.foreground.to_tui_color()),
             ),
         ]),
