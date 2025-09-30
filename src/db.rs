@@ -1,9 +1,8 @@
-
 // src/db.rs
 
-use rusqlite::{Connection, params, Result};
-use chrono::Local;
 use crate::app::state::App;
+use chrono::Local;
+use rusqlite::{params, Connection, Result};
 use std::{fs, path::PathBuf};
 
 /// Open (or create) the SQLite DB under XDG data dir:
@@ -12,19 +11,18 @@ use std::{fs, path::PathBuf};
 pub fn open() -> Result<Connection> {
     // Determine the base data directory:
     // On Linux this is $XDG_DATA_HOME or ~/.local/share.
-    let mut data_dir = dirs::data_dir()
-        .unwrap_or_else(|| PathBuf::from("."));
+    let mut data_dir = dirs::data_dir().unwrap_or_else(|| PathBuf::from("."));
     // Append your app’s folder
     data_dir.push("term-typist");
     // Make sure it exists
-    fs::create_dir_all(&data_dir)
-        .expect("could not create data dir");
+    fs::create_dir_all(&data_dir).expect("could not create data dir");
     // Finally, the database file
     data_dir.push("term_typist.db");
 
     // Open & run CREATE TABLE IF NOT EXISTS…
     let conn = Connection::open(data_dir)?;
-    conn.execute_batch(r#"
+    conn.execute_batch(
+        r#"
         PRAGMA foreign_keys = ON;
 
         CREATE TABLE IF NOT EXISTS tests (
@@ -45,7 +43,8 @@ pub fn open() -> Result<Connection> {
             elapsed_s  INTEGER NOT NULL,
             wpm        REAL    NOT NULL
         );
-    "#)?;
+    "#,
+    )?;
     Ok(conn)
 }
 
@@ -66,14 +65,19 @@ pub fn save_test(conn: &mut Connection, app: &App) -> Result<()> {
         .cloned()
         .unwrap_or(0) as i64;
     let _elapsed_secs = app.elapsed_secs() as f64;
-    // Build a synthetic 'now' Instant corresponding to the end of the test so the
-    // timestamp-based net WPM measurement uses the test end time.
-    let now = if let Some(start) = app.start { start + std::time::Duration::from_secs(app.elapsed_secs()) } else { std::time::Instant::now() };
-    let wpm = crate::wpm::net_wpm_from_correct_timestamps(&app.correct_timestamps, now);
+    // Compute net using the test window [start, end] so the denominator matches raw WPM.
+    let wpm = if let Some(start) = app.start {
+        let end = start + std::time::Duration::from_secs(app.elapsed_secs());
+        crate::wpm::net_wpm_from_correct_timestamps_window(&app.correct_timestamps, start, end)
+    } else {
+        0.0
+    };
     // Accuracy unchanged: correct / total
     let acc = if app.correct_chars + app.incorrect_chars > 0 {
         (app.correct_chars as f64) / ((app.correct_chars + app.incorrect_chars) as f64) * 100.0
-    } else { 100.0 };
+    } else {
+        100.0
+    };
 
     let tx = conn.transaction()?;
     tx.execute(

@@ -31,24 +31,38 @@ pub fn raw_wpm_from_counts(total_typed_chars: usize, elapsed_secs: f64) -> f64 {
     (total_typed_chars as f64) / 5.0 / minutes
 }
 
-/// Net WPM computed from the timestamps of correct keystrokes.
-/// This measures the time between the first and last correct keystroke, so mistakes
-/// (incorrect keystrokes) that occur between correct ones increase the duration and
-/// therefore penalize net WPM as desired.
-pub fn net_wpm_from_correct_timestamps(correct_timestamps: &[Instant], now: Instant) -> f64 {
-    if correct_timestamps.is_empty() {
+/// Net WPM computed from the test window [start, end] and the number of correct keystrokes.
+/// Denominator is the same as raw WPM (elapsed since test start), so raw >= net always holds.
+pub fn net_wpm_from_correct_timestamps_window(
+    correct_timestamps: &[Instant],
+    start: Instant,
+    end: Instant,
+) -> f64 {
+    if end <= start {
         return 0.0;
     }
-    // Use the time from the first correct keystroke up to `now` so the WPM
-    // keeps updating each second even if no new correct key has been typed.
-    let first = correct_timestamps.first().unwrap();
-    let elapsed_secs = now.duration_since(*first).as_secs_f64();
+    let elapsed_secs = end.duration_since(start).as_secs_f64();
     if elapsed_secs <= 0.0 {
         return 0.0;
     }
     let minutes = elapsed_secs / 60.0;
     let correct = correct_timestamps.len() as f64;
     (correct / 5.0) / minutes
+}
+
+/// Legacy wrapper: keep original signature for backward compatibility.
+/// Deprecated — callers should pass the test `start` and `end` to the windowed function
+/// (use `net_wpm_from_correct_timestamps_window`) so net and raw use the same denominator.
+///
+/// This wrapper preserves the previous behavior (using first correct keystroke as the start)
+/// to avoid an immediate break; please update call sites to use the windowed function.
+#[deprecated(note = "use net_wpm_from_correct_timestamps_window(correct_timestamps, start, end)")]
+pub fn net_wpm_from_correct_timestamps(correct_timestamps: &[Instant], now: Instant) -> f64 {
+    if correct_timestamps.is_empty() {
+        return 0.0;
+    }
+    let first = correct_timestamps.first().unwrap();
+    net_wpm_from_correct_timestamps_window(correct_timestamps, *first, now)
 }
 
 /// Accuracy percentage: correct_chars ÷ (correct_chars + incorrect_chars) × 100.

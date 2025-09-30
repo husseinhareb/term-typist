@@ -1,15 +1,15 @@
+use crate::app::state::{App, Mode, Status};
+use crate::graph;
+use crate::ui::keyboard::Keyboard;
+use crate::wpm::accuracy;
 use tui::{
     backend::Backend,
-    layout::{ Constraint, Direction, Layout },
-    style::{ Modifier, Style },
-    text::{ Span, Spans },
-    widgets::{ Block, Borders, Paragraph, Tabs, Wrap },
+    layout::{Constraint, Direction, Layout},
+    style::{Modifier, Style},
+    text::{Span, Spans},
+    widgets::{Block, Borders, Paragraph, Tabs, Wrap},
     Frame,
 };
-use crate::app::state::{ App, Mode, Status };
-use crate::ui::keyboard::Keyboard;
-use crate::graph;
-use crate::wpm::accuracy;
 
 /// Main drawing function.
 /// - `cached_net` and `cached_acc` come from your throttled WPM/accuracy logic.
@@ -18,11 +18,10 @@ pub fn draw<B: Backend>(
     app: &App,
     keyboard: &Keyboard,
     cached_net: f64,
-    cached_acc: f64
+    cached_acc: f64,
 ) {
     // ── Profile screen takes over entirely
     if app.mode == Mode::Profile {
-        
         return;
     }
     let size = f.size();
@@ -37,7 +36,10 @@ pub fn draw<B: Backend>(
     }
     v_cons.push(Constraint::Min(3)); // Row 3 (always present)
 
-    let rows = Layout::default().direction(Direction::Vertical).constraints(v_cons).split(size);
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(v_cons)
+        .split(size);
 
     let mut row_idx = 0;
 
@@ -76,22 +78,29 @@ pub fn draw<B: Backend>(
 
             let tabs = Tabs::new(titles)
                 .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(app.theme.border.to_tui_color()))
-                .style(Style::default().bg(app.theme.background.to_tui_color()).fg(app.theme.foreground.to_tui_color()))
-                        .title(
-                            Spans::from(
-                                vec![
-                                    Span::styled("¹", Style::default().fg(app.theme.title_accent.to_tui_color())),
-                                    Span::raw(" Mode")
-                                ]
-                            )
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .border_style(Style::default().fg(app.theme.border.to_tui_color()))
+                        .style(
+                            Style::default()
+                                .bg(app.theme.background.to_tui_color())
+                                .fg(app.theme.foreground.to_tui_color()),
                         )
+                        .title(Spans::from(vec![
+                            Span::styled(
+                                "¹",
+                                Style::default().fg(app.theme.title_accent.to_tui_color()),
+                            ),
+                            Span::raw(" Mode"),
+                        ])),
                 )
                 .select(app.selected_tab)
                 .style(Style::default().fg(app.theme.tab_inactive.to_tui_color()))
-                .highlight_style(Style::default().fg(app.theme.tab_active.to_tui_color()).add_modifier(Modifier::BOLD))
+                .highlight_style(
+                    Style::default()
+                        .fg(app.theme.tab_active.to_tui_color())
+                        .add_modifier(Modifier::BOLD),
+                )
                 .divider(Span::raw(" "));
 
             f.render_widget(tabs, cols[col_idx]);
@@ -103,16 +112,16 @@ pub fn draw<B: Backend>(
             let mut spans = vec![Span::raw("| ")];
             for (i, &v) in app.current_options().iter().enumerate() {
                 let s = v.to_string();
-                spans.push(
-                    if i == app.selected_value {
-                        Span::styled(
-                            s,
-                            Style::default().fg(app.theme.highlight.to_tui_color()).add_modifier(Modifier::BOLD)
-                        )
-                    } else {
-                        Span::styled(s, Style::default().fg(app.theme.foreground.to_tui_color()))
-                    }
-                );
+                spans.push(if i == app.selected_value {
+                    Span::styled(
+                        s,
+                        Style::default()
+                            .fg(app.theme.highlight.to_tui_color())
+                            .add_modifier(Modifier::BOLD),
+                    )
+                } else {
+                    Span::styled(s, Style::default().fg(app.theme.foreground.to_tui_color()))
+                });
                 spans.push(Span::raw(" "));
             }
 
@@ -120,15 +129,18 @@ pub fn draw<B: Backend>(
                 Block::default()
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(app.theme.border.to_tui_color()))
-                    .style(Style::default().bg(app.theme.background.to_tui_color()).fg(app.theme.foreground.to_tui_color()))
-                    .title(
-                        Spans::from(
-                            vec![
-                                Span::styled("²", Style::default().fg(app.theme.title_accent.to_tui_color())),
-                                Span::raw(" Value")
-                            ]
-                        )
+                    .style(
+                        Style::default()
+                            .bg(app.theme.background.to_tui_color())
+                            .fg(app.theme.foreground.to_tui_color()),
                     )
+                    .title(Spans::from(vec![
+                        Span::styled(
+                            "²",
+                            Style::default().fg(app.theme.title_accent.to_tui_color()),
+                        ),
+                        Span::raw(" Value"),
+                    ])),
             );
 
             f.render_widget(opts, cols[col_idx]);
@@ -175,15 +187,18 @@ pub fn draw<B: Backend>(
                 Block::default()
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(app.theme.border.to_tui_color()))
-                    .style(Style::default().bg(app.theme.background.to_tui_color()).fg(app.theme.foreground.to_tui_color()))
-                    .title(
-                        Spans::from(
-                            vec![
-                                Span::styled("³", Style::default().fg(app.theme.title_accent.to_tui_color())),
-                                Span::raw(" State")
-                            ]
-                        )
+                    .style(
+                        Style::default()
+                            .bg(app.theme.background.to_tui_color())
+                            .fg(app.theme.foreground.to_tui_color()),
                     )
+                    .title(Spans::from(vec![
+                        Span::styled(
+                            "³",
+                            Style::default().fg(app.theme.title_accent.to_tui_color()),
+                        ),
+                        Span::raw(" State"),
+                    ])),
             );
             f.render_widget(state, cols[col_idx]);
             col_idx += 1;
@@ -200,15 +215,18 @@ pub fn draw<B: Backend>(
                 Block::default()
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(app.theme.border.to_tui_color()))
-                    .style(Style::default().bg(app.theme.background.to_tui_color()).fg(app.theme.foreground.to_tui_color()))
-                    .title(
-                        Spans::from(
-                            vec![
-                                Span::styled("⁴", Style::default().fg(app.theme.title_accent.to_tui_color())),
-                                Span::raw(" Speed")
-                            ]
-                        )
+                    .style(
+                        Style::default()
+                            .bg(app.theme.background.to_tui_color())
+                            .fg(app.theme.foreground.to_tui_color()),
                     )
+                    .title(Spans::from(vec![
+                        Span::styled(
+                            "⁴",
+                            Style::default().fg(app.theme.title_accent.to_tui_color()),
+                        ),
+                        Span::raw(" Speed"),
+                    ])),
             );
             f.render_widget(speed, cols[col_idx]);
             col_idx += 1;
@@ -224,14 +242,14 @@ pub fn draw<B: Backend>(
                     } else {
                         match app.selected_tab {
                             0 => {
-                                let rem = (
-                                    (app.current_options()[app.selected_value] as i64) -
-                                    (app.elapsed_secs() as i64)
-                                ).max(0);
+                                let rem = ((app.current_options()[app.selected_value] as i64)
+                                    - (app.elapsed_secs() as i64))
+                                    .max(0);
                                 format!("Time left: {}s", rem)
                             }
                             1 => {
-                                let idx = app.status
+                                let idx = app
+                                    .status
                                     .iter()
                                     .position(|&s| s == Status::Untyped)
                                     .unwrap_or(app.status.len());
@@ -246,27 +264,29 @@ pub fn draw<B: Backend>(
                         }
                     }
                 }
-                Mode::Finished =>
-                    format!(
-                        "🏁 Done! {}s • {:.1} WPM  Esc=Restart",
-                        app.elapsed_secs(),
-                        cached_net
-                    ),
+                Mode::Finished => format!(
+                    "🏁 Done! {}s • {:.1} WPM  Esc=Restart",
+                    app.elapsed_secs(),
+                    cached_net
+                ),
                 _ => "".into(),
             };
             let timer = Paragraph::new(timer_txt).block(
                 Block::default()
-                            .borders(Borders::ALL)
-                            .border_style(Style::default().fg(app.theme.border.to_tui_color()))
-                            .style(Style::default().bg(app.theme.background.to_tui_color()).fg(app.theme.foreground.to_tui_color()))
-                    .title(
-                        Spans::from(
-                            vec![
-                                Span::styled("⁵", Style::default().fg(app.theme.title_accent.to_tui_color())),
-                                Span::raw(" Timer")
-                            ]
-                        )
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(app.theme.border.to_tui_color()))
+                    .style(
+                        Style::default()
+                            .bg(app.theme.background.to_tui_color())
+                            .fg(app.theme.foreground.to_tui_color()),
                     )
+                    .title(Spans::from(vec![
+                        Span::styled(
+                            "⁵",
+                            Style::default().fg(app.theme.title_accent.to_tui_color()),
+                        ),
+                        Span::raw(" Timer"),
+                    ])),
             );
             f.render_widget(timer, cols[col_idx]);
         }
@@ -297,7 +317,8 @@ pub fn draw<B: Backend>(
         let area = bottom_chunks[bi];
         bi += 1;
         if app.selected_tab == 2 {
-            let free: Vec<Span> = app.free_text
+            let free: Vec<Span> = app
+                .free_text
                 .chars()
                 .map(|c| Span::raw(c.to_string()))
                 .collect();
@@ -305,36 +326,47 @@ pub fn draw<B: Backend>(
                 Paragraph::new(Spans::from(free))
                     .block(
                         Block::default()
-                                    .borders(Borders::ALL)
-                                    .border_style(Style::default().fg(app.theme.border.to_tui_color()))
-                                    .style(Style::default().bg(app.theme.background.to_tui_color()).fg(app.theme.foreground.to_tui_color()))
-                            .title(
-                                Spans::from(
-                                    vec![
-                                        Span::styled("⁶", Style::default().fg(app.theme.title_accent.to_tui_color())),
-                                        Span::raw(" Text")
-                                    ]
-                                )
+                            .borders(Borders::ALL)
+                            .border_style(Style::default().fg(app.theme.border.to_tui_color()))
+                            .style(
+                                Style::default()
+                                    .bg(app.theme.background.to_tui_color())
+                                    .fg(app.theme.foreground.to_tui_color()),
                             )
+                            .title(Spans::from(vec![
+                                Span::styled(
+                                    "⁶",
+                                    Style::default().fg(app.theme.title_accent.to_tui_color()),
+                                ),
+                                Span::raw(" Text"),
+                            ])),
                     )
                     .wrap(Wrap { trim: true }),
-                area
+                area,
             );
         } else {
-            let cur = app.status
+            let cur = app
+                .status
                 .iter()
                 .position(|&s| s == Status::Untyped)
                 .unwrap_or(app.status.len());
 
-            let spans: Vec<Span> = app.target
+            let spans: Vec<Span> = app
+                .target
                 .chars()
                 .zip(app.status.iter().cloned())
                 .enumerate()
                 .map(|(i, (ch, st))| {
                     let base_style = match st {
-                        Status::Untyped => Style::default().fg(app.theme.text_untyped.to_tui_color()),
-                        Status::Correct => Style::default().fg(app.theme.text_correct.to_tui_color()),
-                        Status::Incorrect => Style::default().fg(app.theme.text_incorrect.to_tui_color()),
+                        Status::Untyped => {
+                            Style::default().fg(app.theme.text_untyped.to_tui_color())
+                        }
+                        Status::Correct => {
+                            Style::default().fg(app.theme.text_correct.to_tui_color())
+                        }
+                        Status::Incorrect => {
+                            Style::default().fg(app.theme.text_incorrect.to_tui_color())
+                        }
                     };
                     if i == cur && app.mode == Mode::Insert {
                         Span::styled(
@@ -342,7 +374,7 @@ pub fn draw<B: Backend>(
                             base_style
                                 .bg(app.theme.text_cursor_bg.to_tui_color())
                                 .fg(app.theme.text_cursor_fg.to_tui_color())
-                                .add_modifier(Modifier::BOLD)
+                                .add_modifier(Modifier::BOLD),
                         )
                     } else {
                         Span::styled(ch.to_string(), base_style)
@@ -356,18 +388,21 @@ pub fn draw<B: Backend>(
                         Block::default()
                             .borders(Borders::ALL)
                             .border_style(Style::default().fg(app.theme.border.to_tui_color()))
-                            .style(Style::default().bg(app.theme.background.to_tui_color()).fg(app.theme.foreground.to_tui_color()))
-                            .title(
-                                Spans::from(
-                                    vec![
-                                        Span::styled("⁶", Style::default().fg(app.theme.title_accent.to_tui_color())),
-                                        Span::raw(" Text")
-                                    ]
-                                )
+                            .style(
+                                Style::default()
+                                    .bg(app.theme.background.to_tui_color())
+                                    .fg(app.theme.foreground.to_tui_color()),
                             )
+                            .title(Spans::from(vec![
+                                Span::styled(
+                                    "⁶",
+                                    Style::default().fg(app.theme.title_accent.to_tui_color()),
+                                ),
+                                Span::raw(" Text"),
+                            ])),
                     )
                     .wrap(Wrap { trim: true }),
-                area
+                area,
             );
         }
     }
@@ -380,22 +415,25 @@ pub fn draw<B: Backend>(
         let block = Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(app.theme.border.to_tui_color()))
-            .style(Style::default().bg(app.theme.background.to_tui_color()).fg(app.theme.foreground.to_tui_color()))
-            .title(
-                Spans::from(
-                    vec![
-                        Span::styled("⁷", Style::default().fg(app.theme.title_accent.to_tui_color())),
-                        Span::raw(" Keyboard")
-                    ]
-                )
-            );
+            .style(
+                Style::default()
+                    .bg(app.theme.background.to_tui_color())
+                    .fg(app.theme.foreground.to_tui_color()),
+            )
+            .title(Spans::from(vec![
+                Span::styled(
+                    "⁷",
+                    Style::default().fg(app.theme.title_accent.to_tui_color()),
+                ),
+                Span::raw(" Keyboard"),
+            ]));
 
         // 2) Compute the inner rect and render the block
         let inner = block.inner(area);
         f.render_widget(block, area);
 
-    // 3) Draw the keyboard inside the inner rect
-    keyboard.draw(f, inner, &app.theme, app.keyboard_layout);
+        // 3) Draw the keyboard inside the inner rect
+        keyboard.draw(f, inner, &app.theme, app.keyboard_layout);
     }
 
     // Caps Lock modal overlay is rendered from lib.rs after screen-specific drawing.
@@ -413,12 +451,22 @@ pub fn draw_finished<B: Backend>(f: &mut Frame<B>, app: &App) {
     graph::draw_wpm_chart(f, chunks[0], &app.samples, &app.theme);
 
     // Right: stats
-    let elapsed_secs = app.elapsed_secs();
-    let elapsed_f = elapsed_secs as f64;
-    // compute net using correct timestamps (penalizes mistakes via time gaps)
-    let net = crate::wpm::net_wpm_from_correct_timestamps(&app.correct_timestamps, std::time::Instant::now());
+    // Align net and raw WPM to the same time window (test start -> end) so raw >= net.
+    let (elapsed_secs, net, raw) = if let Some(start) = app.start {
+        let end = std::time::Instant::now();
+        let elapsed_secs = end.duration_since(start).as_secs() as u64;
+        let elapsed_f = end.duration_since(start).as_secs_f64();
+        let net =
+            crate::wpm::net_wpm_from_correct_timestamps_window(&app.correct_timestamps, start, end);
+        let raw =
+            crate::wpm::raw_wpm_from_counts(app.correct_chars + app.incorrect_chars, elapsed_f);
+        (elapsed_secs, net, raw)
+    } else {
+        // No start recorded — fall back to zeros
+        (0u64, 0.0f64, 0.0f64)
+    };
+    // Compute accuracy from counts so the variable `acc` is available for rendering.
     let acc = accuracy(app.correct_chars, app.incorrect_chars);
-    let raw = crate::wpm::raw_wpm_from_counts(app.correct_chars + app.incorrect_chars, elapsed_f);
     let errs = app.incorrect_chars;
     let test_type = match app.selected_tab {
         0 => format!("time {}s", app.current_options()[app.selected_value]),
@@ -428,17 +476,10 @@ pub fn draw_finished<B: Backend>(f: &mut Frame<B>, app: &App) {
 
     // Simple consistency metric
     let consistency = {
-        let vs: Vec<f64> = app.samples
-            .iter()
-            .map(|&(_, w)| w)
-            .collect();
+        let vs: Vec<f64> = app.samples.iter().map(|&(_, w)| w).collect();
         if vs.len() > 1 {
             let mean = vs.iter().sum::<f64>() / (vs.len() as f64);
-            let var =
-                vs
-                    .iter()
-                    .map(|v| (v - mean).powi(2))
-                    .sum::<f64>() / (vs.len() as f64);
+            let var = vs.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / (vs.len() as f64);
             let std = var.sqrt();
             format!("{:.0}%", (1.0 - std / (mean + 1.0)).max(0.0) * 100.0)
         } else {
@@ -447,54 +488,80 @@ pub fn draw_finished<B: Backend>(f: &mut Frame<B>, app: &App) {
     };
 
     let items = vec![
-        Spans::from(
-            vec![
-                Span::styled("WPM  ", Style::default().fg(app.theme.stats_label.to_tui_color())),
-                Span::styled(
-                    format!("{:.0}", net),
-                    Style::default().fg(app.theme.stats_value.to_tui_color()).add_modifier(Modifier::BOLD)
-                )
-            ]
-        ),
-        Spans::from(
-            vec![
-                Span::styled("ACC  ", Style::default().fg(app.theme.stats_label.to_tui_color())),
-                Span::styled(
-                    format!("{:.0}%", acc),
-                    Style::default().fg(app.theme.stats_value.to_tui_color()).add_modifier(Modifier::BOLD)
-                )
-            ]
-        ),
-        Spans::from(
-            vec![
-                Span::styled("RAW  ", Style::default().fg(app.theme.stats_label.to_tui_color())),
-                Span::styled(raw.to_string(), Style::default().fg(app.theme.foreground.to_tui_color()))
-            ]
-        ),
-        Spans::from(
-            vec![
-                Span::styled("ERR  ", Style::default().fg(app.theme.stats_label.to_tui_color())),
-                Span::styled(errs.to_string(), Style::default().fg(app.theme.foreground.to_tui_color()))
-            ]
-        ),
-        Spans::from(
-            vec![
-                Span::styled("TYPE ", Style::default().fg(app.theme.stats_label.to_tui_color())), 
-                Span::styled(test_type, Style::default().fg(app.theme.foreground.to_tui_color()))
-            ]
-        ),
-        Spans::from(
-            vec![
-                Span::styled("CONS ", Style::default().fg(app.theme.stats_label.to_tui_color())), 
-                Span::styled(consistency, Style::default().fg(app.theme.foreground.to_tui_color()))
-            ]
-        ),
-        Spans::from(
-            vec![
-                Span::styled("TIME ", Style::default().fg(app.theme.stats_label.to_tui_color())),
-                Span::styled(format!("{}s", elapsed_secs), Style::default().fg(app.theme.foreground.to_tui_color()))
-            ]
-        )
+        Spans::from(vec![
+            Span::styled(
+                "WPM  ",
+                Style::default().fg(app.theme.stats_label.to_tui_color()),
+            ),
+            Span::styled(
+                format!("{:.0}", net),
+                Style::default()
+                    .fg(app.theme.stats_value.to_tui_color())
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Spans::from(vec![
+            Span::styled(
+                "ACC  ",
+                Style::default().fg(app.theme.stats_label.to_tui_color()),
+            ),
+            Span::styled(
+                format!("{:.0}%", acc),
+                Style::default()
+                    .fg(app.theme.stats_value.to_tui_color())
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Spans::from(vec![
+            Span::styled(
+                "RAW  ",
+                Style::default().fg(app.theme.stats_label.to_tui_color()),
+            ),
+            Span::styled(
+                raw.to_string(),
+                Style::default().fg(app.theme.foreground.to_tui_color()),
+            ),
+        ]),
+        Spans::from(vec![
+            Span::styled(
+                "ERR  ",
+                Style::default().fg(app.theme.stats_label.to_tui_color()),
+            ),
+            Span::styled(
+                errs.to_string(),
+                Style::default().fg(app.theme.foreground.to_tui_color()),
+            ),
+        ]),
+        Spans::from(vec![
+            Span::styled(
+                "TYPE ",
+                Style::default().fg(app.theme.stats_label.to_tui_color()),
+            ),
+            Span::styled(
+                test_type,
+                Style::default().fg(app.theme.foreground.to_tui_color()),
+            ),
+        ]),
+        Spans::from(vec![
+            Span::styled(
+                "CONS ",
+                Style::default().fg(app.theme.stats_label.to_tui_color()),
+            ),
+            Span::styled(
+                consistency,
+                Style::default().fg(app.theme.foreground.to_tui_color()),
+            ),
+        ]),
+        Spans::from(vec![
+            Span::styled(
+                "TIME ",
+                Style::default().fg(app.theme.stats_label.to_tui_color()),
+            ),
+            Span::styled(
+                format!("{}s", elapsed_secs),
+                Style::default().fg(app.theme.foreground.to_tui_color()),
+            ),
+        ]),
     ];
 
     let stats = Paragraph::new(items)
@@ -502,8 +569,12 @@ pub fn draw_finished<B: Backend>(f: &mut Frame<B>, app: &App) {
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(app.theme.border.to_tui_color()))
-                .style(Style::default().bg(app.theme.background.to_tui_color()).fg(app.theme.foreground.to_tui_color()))
-                .title("Summary")
+                .style(
+                    Style::default()
+                        .bg(app.theme.background.to_tui_color())
+                        .fg(app.theme.foreground.to_tui_color()),
+                )
+                .title("Summary"),
         )
         .wrap(Wrap { trim: true });
 

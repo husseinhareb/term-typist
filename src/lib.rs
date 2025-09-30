@@ -1,33 +1,36 @@
 // src/ui/lib.rs
 
-use std::{ io, time::{ Duration, Instant } };
 use crossterm::{
+    event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
     execute,
-    terminal::{ disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen },
-    event::{ self, Event, KeyCode, KeyEvent, KeyModifiers },
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use tui::{ backend::CrosstermBackend, Terminal, widgets::Paragraph, style::Style };
+use std::{
+    io,
+    time::{Duration, Instant},
+};
+use tui::{backend::CrosstermBackend, style::Style, widgets::Paragraph, Terminal};
 
-mod app;       // src/app/mod.rs → state.rs, input.rs, config.rs
-mod ui;        // src/ui/mod.rs → draw.rs, keyboard.rs
-mod graph;     // src/graph.rs
-mod wpm;       // src/wpm.rs
+mod app; // src/app/mod.rs → state.rs, input.rs, config.rs
+mod audio;
+mod caps; // src/caps.rs (platform helpers)
+mod db; // src/db.rs
 mod generator; // src/generator.rs
-mod db;        // src/db.rs
-mod caps;      // src/caps.rs (platform helpers)
-mod theme;     // src/theme.rs
+mod graph; // src/graph.rs
+mod theme; // src/theme.rs
 pub mod themes_presets; // src/themes_presets.rs (predefined themes)
-mod audio;     // src/audio.rs
+mod ui; // src/ui/mod.rs → draw.rs, keyboard.rs
+mod wpm; // src/wpm.rs // src/audio.rs
 
-use app::state::{ App, Mode, Status };
-use std::cmp;
-use app::input::handle_nav;
-use ui::draw::{ draw, draw_finished };
-use ui::keyboard::Keyboard;
-use wpm::{ accuracy, elapsed_seconds_since_start };
-use db::{ open, save_test };
 use crate::ui::profile::draw_profile;
-use crate::ui::settings::draw_settings; 
+use crate::ui::settings::draw_settings;
+use app::input::handle_nav;
+use app::state::{App, Mode, Status};
+use db::{open, save_test};
+use std::cmp;
+use ui::draw::{draw, draw_finished};
+use ui::keyboard::Keyboard;
+use wpm::{accuracy, elapsed_seconds_since_start};
 
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     // — Open (or create) the SQLite DB under ~/.local/share/term-typist/term_typist.db
@@ -79,19 +82,30 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut app = make_app();
     // Initialize caps lock state from system if possible
     app.caps_detection_available = caps::detection_available();
-    app.caps_lock_on = if app.caps_detection_available { caps::is_caps_lock_on() } else { false };
+    app.caps_lock_on = if app.caps_detection_available {
+        caps::is_caps_lock_on()
+    } else {
+        false
+    };
     // No startup hint; Caps Lock state is driven by system detection or heuristics.
     let mut keyboard = Keyboard::new();
     // Initialize audio playback (background thread/stream)
     audio::init();
 
     'main: loop {
-        // Poll OS Caps Lock state (best-effort) each tick to support toggles
-        let os_caps = caps::is_caps_lock_on();
-        if os_caps != app.caps_lock_on {
-            app.caps_lock_on = os_caps;
+        // Poll OS Caps Lock state (best-effort) each tick to support toggles.
+        // Only query the OS when a system-backed detection method is available.
+        // If detection is available we trust the system value and do not allow
+        // in-terminal heuristics to override it.
+        if app.caps_detection_available {
+            let os_caps = caps::is_caps_lock_on();
+            if os_caps != app.caps_lock_on {
+                app.caps_lock_on = os_caps;
+            }
         }
-        // No timeout anymore: we show the modal whenever caps_lock_on is true.
+        // No timeout anymore: modal overlay is only shown when system-backed detection is available
+        // and the OS reports Caps Lock is actually on. Heuristics still update the `caps_lock_on`
+        // flag but won't trigger the persistent modal.
         // — Throttle WPM/accuracy updates once per second
         if let Mode::Insert = app.mode {
             if app.start.is_some() && last_wpm_update.elapsed() >= Duration::from_secs(1) {
@@ -99,7 +113,18 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 let idle = Instant::now().duration_since(app.last_input).as_secs_f64();
                 let _effective = real_secs + idle;
                 // Raw WPM counts all typed chars as if correct
-                cached_net = crate::wpm::net_wpm_from_correct_timestamps(&app.correct_timestamps, std::time::Instant::now());
+                // Net WPM must use the same time window as raw WPM (test start -> now).
+                // Use the windowed function so raw >= net always holds.
+                if let Some(start) = app.start {
+                    let now = std::time::Instant::now();
+                    cached_net = crate::wpm::net_wpm_from_correct_timestamps_window(
+                        &app.correct_timestamps,
+                        start,
+                        now,
+                    );
+                } else {
+                    cached_net = 0.0;
+                }
                 cached_acc = accuracy(app.correct_chars, app.incorrect_chars);
                 last_wpm_update = Instant::now();
 
@@ -116,7 +141,11 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             // First, paint a full-screen themed background so no terminal
             // pixels show through at the edges (this fills every cell).
             let size = f.size();
-            let bg = Paragraph::new("").style(Style::default().bg(app.theme.background.to_tui_color()).fg(app.theme.foreground.to_tui_color()));
+            let bg = Paragraph::new("").style(
+                Style::default()
+                    .bg(app.theme.background.to_tui_color())
+                    .fg(app.theme.foreground.to_tui_color()),
+            );
             f.render_widget(bg, size);
 
             match app.mode {
@@ -139,25 +168,45 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
 
-            // Global overlay: Caps Lock modal (always show when caps_lock_on is true)
-            if app.caps_lock_on {
-                    let area = f.size();
-                    let label = "🔒  Caps Lock";
-                    let content_width = (label.chars().count() as u16) + 6; // padding + borders
-                    let w = content_width.min(area.width.saturating_sub(2)).max(16);
-                    let h = 3u16;
-                    let x = (area.width.saturating_sub(w)) / 2;
-                    let y = (area.height.saturating_sub(h)) / 2;
-                    let rect = tui::layout::Rect::new(x, y, w, h);
+            // Global overlay: Caps Lock modal — query the system fresh at render time.
+            // Previously we relied on `app.caps_lock_on` which could be set by heuristics
+            // or user toggles; that caused the modal to appear incorrectly. Here we
+            // perform a fresh system query (when available) to determine whether to show
+            // the persistent modal. Heuristics may still update the `app.caps_lock_on`
+            // flag for internal logic, but they won't trigger the modal unless the
+            // system actually reports CapsLock on.
+            let show_caps_modal = if app.caps_detection_available {
+                // Query the OS directly at render time to avoid stale/heuristic-driven state.
+                caps::is_caps_lock_on()
+            } else {
+                false
+            };
 
-                    // Use accent background for visibility and contrasting foreground.
-                    let block = tui::widgets::Block::default()
-                        .borders(tui::widgets::Borders::ALL)
-                        .style(Style::default().bg(app.theme.title_accent.to_tui_color()).fg(app.theme.background.to_tui_color()));
-                    f.render_widget(block.clone(), rect);
-                    let inner = block.inner(rect);
-                    let para = tui::widgets::Paragraph::new(tui::text::Spans::from(vec![tui::text::Span::raw(label)])).style(Style::default().fg(app.theme.background.to_tui_color()));
-                    f.render_widget(para, inner);
+            if show_caps_modal {
+                let area = f.size();
+                let label = "🔒  Caps Lock";
+                let content_width = (label.chars().count() as u16) + 6; // padding + borders
+                let w = content_width.min(area.width.saturating_sub(2)).max(16);
+                let h = 3u16;
+                let x = (area.width.saturating_sub(w)) / 2;
+                let y = (area.height.saturating_sub(h)) / 2;
+                let rect = tui::layout::Rect::new(x, y, w, h);
+
+                // Use accent background for visibility and contrasting foreground.
+                let block = tui::widgets::Block::default()
+                    .borders(tui::widgets::Borders::ALL)
+                    .style(
+                        Style::default()
+                            .bg(app.theme.title_accent.to_tui_color())
+                            .fg(app.theme.background.to_tui_color()),
+                    );
+                f.render_widget(block.clone(), rect);
+                let inner = block.inner(rect);
+                let para = tui::widgets::Paragraph::new(tui::text::Spans::from(vec![
+                    tui::text::Span::raw(label),
+                ]))
+                .style(Style::default().fg(app.theme.background.to_tui_color()));
+                f.render_widget(para, inner);
             }
 
             // (No startup test hint is shown; Caps Lock is driven by system detection,
@@ -165,21 +214,47 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         })?;
 
         // — Handle input & toggles
-        let timeout = tick_rate.checked_sub(last_tick.elapsed()).unwrap_or_default();
+        let timeout = tick_rate
+            .checked_sub(last_tick.elapsed())
+            .unwrap_or_default();
         if event::poll(timeout)? {
-                if let Event::Key(KeyEvent { code, modifiers, .. }) = event::read()? {
+            if let Event::Key(KeyEvent {
+                code, modifiers, ..
+            }) = event::read()?
+            {
+                // Terminals don't reliably expose a CAPS_LOCK modifier via crossterm.
+                // Rely on existing heuristics (uppercase letters typed without SHIFT imply CapsLock)
+                // and on periodic OS polling when `caps_detection_available` is true.
                 // ── SHIFT+NUMBER PANEL TOGGLES
                 match code {
-                    // Only toggle CapsLock state if the terminal reports an actual CapsLock key press
-                    // If the terminal reports an explicit CapsLock key press, toggle the flag
-                    KeyCode::CapsLock => { app.caps_lock_on = !app.caps_lock_on; continue 'main; }
-                    KeyCode::Char('!') => { app.show_mode     = !app.show_mode;     continue 'main; }
-                    KeyCode::Char('@') => { app.show_value    = !app.show_value;    continue 'main; }
-                    KeyCode::Char('#') => { app.show_state    = !app.show_state;    continue 'main; }
-                    KeyCode::Char('$') => { app.show_speed    = !app.show_speed;    continue 'main; }
-                    KeyCode::Char('%') => { app.show_timer    = !app.show_timer;    continue 'main; }
-                    KeyCode::Char('^') => { app.show_text     = !app.show_text;     continue 'main; }
-                    KeyCode::Char('&') => { app.show_keyboard = !app.show_keyboard; continue 'main; }
+                    KeyCode::Char('!') => {
+                        app.show_mode = !app.show_mode;
+                        continue 'main;
+                    }
+                    KeyCode::Char('@') => {
+                        app.show_value = !app.show_value;
+                        continue 'main;
+                    }
+                    KeyCode::Char('#') => {
+                        app.show_state = !app.show_state;
+                        continue 'main;
+                    }
+                    KeyCode::Char('$') => {
+                        app.show_speed = !app.show_speed;
+                        continue 'main;
+                    }
+                    KeyCode::Char('%') => {
+                        app.show_timer = !app.show_timer;
+                        continue 'main;
+                    }
+                    KeyCode::Char('^') => {
+                        app.show_text = !app.show_text;
+                        continue 'main;
+                    }
+                    KeyCode::Char('&') => {
+                        app.show_keyboard = !app.show_keyboard;
+                        continue 'main;
+                    }
                     _ => {}
                 }
 
@@ -208,7 +283,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     last_tick = Instant::now();
                 }
 
-                if app.mode == Mode::View && (code == KeyCode::F(1) || matches!(code, KeyCode::Char(c) if c.eq_ignore_ascii_case(&'m'))) {
+                if app.mode == Mode::View
+                    && (code == KeyCode::F(1)
+                        || matches!(code, KeyCode::Char(c) if c.eq_ignore_ascii_case(&'m')))
+                {
                     app.mode = Mode::Menu;
                     app.menu_cursor = 0;
                     continue 'main;
@@ -266,9 +344,15 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 if let KeyCode::Char(c) = code {
                     let lc = c.to_ascii_lowercase();
                     // Heuristic: uppercase letter without SHIFT => CapsLock likely ON
-                    if c.is_ascii_alphabetic() && c.is_ascii_uppercase() && !modifiers.contains(KeyModifiers::SHIFT) {
+                    if c.is_ascii_alphabetic()
+                        && c.is_ascii_uppercase()
+                        && !modifiers.contains(KeyModifiers::SHIFT)
+                    {
                         app.caps_lock_on = true;
-                    } else if c.is_ascii_alphabetic() && c.is_ascii_lowercase() && !modifiers.contains(KeyModifiers::SHIFT) {
+                    } else if c.is_ascii_alphabetic()
+                        && c.is_ascii_lowercase()
+                        && !modifiers.contains(KeyModifiers::SHIFT)
+                    {
                         // typing lowercase without SHIFT suggests CapsLock OFF
                         app.caps_lock_on = false;
                     }
@@ -292,7 +376,11 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                             KeyCode::Up | KeyCode::Char('k') => {
                                 let total = 3usize;
                                 if total > 0 {
-                                    app.menu_cursor = if app.menu_cursor == 0 { total - 1 } else { app.menu_cursor - 1 };
+                                    app.menu_cursor = if app.menu_cursor == 0 {
+                                        total - 1
+                                    } else {
+                                        app.menu_cursor - 1
+                                    };
                                 }
                                 continue 'main;
                             }
@@ -305,20 +393,36 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                             }
                             KeyCode::Enter => {
                                 match app.menu_cursor {
-                                    0 => { app.mode = Mode::Settings; app.menu_cursor = 0; }
-                                    1 => { app.mode = Mode::Help; app.menu_cursor = 0; }
-                                    2 => { disable_raw_mode()?; execute!(io::stdout(), LeaveAlternateScreen)?; return Ok(()); }
+                                    0 => {
+                                        app.mode = Mode::Settings;
+                                        app.menu_cursor = 0;
+                                    }
+                                    1 => {
+                                        app.mode = Mode::Help;
+                                        app.menu_cursor = 0;
+                                    }
+                                    2 => {
+                                        disable_raw_mode()?;
+                                        execute!(io::stdout(), LeaveAlternateScreen)?;
+                                        return Ok(());
+                                    }
                                     _ => {}
                                 }
                                 continue 'main;
                             }
-                            KeyCode::Esc => { app.mode = Mode::View; continue 'main; }
+                            KeyCode::Esc => {
+                                app.mode = Mode::View;
+                                continue 'main;
+                            }
                             _ => {}
                         }
                     }
                     Mode::Help => {
                         // any Esc returns to previous mode (View)
-                        if code == KeyCode::Esc { app.mode = Mode::View; continue 'main; }
+                        if code == KeyCode::Esc {
+                            app.mode = Mode::View;
+                            continue 'main;
+                        }
                     }
                     Mode::View => {
                         if code == KeyCode::Enter {
@@ -328,12 +432,21 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                             // experience is consistent and the text doesn't unexpectedly change
                             // on pressing Enter.
                             if app.target.is_empty() {
-                                let new_target = generator::generate_for_mode(app.selected_tab, app.selected_value);
+                                let new_target = generator::generate_for_mode(
+                                    app.selected_tab,
+                                    app.selected_value,
+                                );
                                 app.target = new_target.clone();
-                                app.status = vec![crate::app::state::Status::Untyped; new_target.chars().count()];
+                                app.status = vec![
+                                    crate::app::state::Status::Untyped;
+                                    new_target.chars().count()
+                                ];
                             } else {
                                 // Ensure status length matches existing target
-                                app.status = vec![crate::app::state::Status::Untyped; app.target.chars().count()];
+                                app.status = vec![
+                                    crate::app::state::Status::Untyped;
+                                    app.target.chars().count()
+                                ];
                             }
 
                             app.mode = Mode::Insert;
@@ -361,27 +474,31 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                                 }
                                 app.on_key(c)
                             }
-                            KeyCode::Backspace  => app.backspace(),
-                            _                   => {}
+                            KeyCode::Backspace => app.backspace(),
+                            _ => {}
                         }
                         // Auto‐finish logic
                         match app.selected_tab {
                             0 => {
                                 // Time mode
-                                if app.elapsed_secs() >= (app.current_options()[app.selected_value] as u64) {
+                                if app.elapsed_secs()
+                                    >= (app.current_options()[app.selected_value] as u64)
+                                {
                                     app.mode = Mode::Finished;
                                 }
                             }
                             1 => {
                                 // Words mode
-                                let completed_chars = app.status
+                                let completed_chars = app
+                                    .status
                                     .iter()
                                     .position(|&s| s == Status::Untyped)
                                     .unwrap_or(app.status.len());
-                                let completed_words = app.target[..completed_chars]
-                                    .split_whitespace()
-                                    .count();
-                                if completed_words >= (app.current_options()[app.selected_value] as usize) {
+                                let completed_words =
+                                    app.target[..completed_chars].split_whitespace().count();
+                                if completed_words
+                                    >= (app.current_options()[app.selected_value] as usize)
+                                {
                                     app.mode = Mode::Finished;
                                 }
                             }
@@ -395,7 +512,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                         terminal.draw(|f| draw_finished(f, &app))?;
                         // Await Esc (restart) or Ctrl-C (quit)
                         loop {
-                            if let Event::Key(KeyEvent { code, modifiers, .. }) = event::read()? {
+                            if let Event::Key(KeyEvent {
+                                code, modifiers, ..
+                            }) = event::read()?
+                            {
                                 if code == KeyCode::Esc {
                                     // When viewing finished results, Esc restarts without saving again.
                                     // Preserve selected tab/value and other UI settings, and
@@ -420,7 +540,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                                     last_sample = 0;
                                     break;
                                 }
-                                if code == KeyCode::Char('c') && modifiers.contains(KeyModifiers::CONTROL) {
+                                if code == KeyCode::Char('c')
+                                    && modifiers.contains(KeyModifiers::CONTROL)
+                                {
                                     disable_raw_mode()?;
                                     execute!(io::stdout(), LeaveAlternateScreen)?;
                                     return Ok(());
@@ -440,7 +562,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                         match code {
                             KeyCode::Up | KeyCode::Char('k') => {
                                 // decrement if possible (like fetch_update with checked_sub)
-                                if app.settings_cursor > 0 { app.settings_cursor = app.settings_cursor.saturating_sub(1); }
+                                if app.settings_cursor > 0 {
+                                    app.settings_cursor = app.settings_cursor.saturating_sub(1);
+                                }
                                 continue 'main;
                             }
                             KeyCode::Down | KeyCode::Char('j') => {
@@ -455,8 +579,14 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                                 app.settings_cursor = app.settings_cursor.saturating_add(10);
                                 continue 'main;
                             }
-                            KeyCode::Home => { app.settings_cursor = 0; continue 'main; }
-                            KeyCode::End => { app.settings_cursor = usize::MAX / 2; continue 'main; }
+                            KeyCode::Home => {
+                                app.settings_cursor = 0;
+                                continue 'main;
+                            }
+                            KeyCode::End => {
+                                app.settings_cursor = usize::MAX / 2;
+                                continue 'main;
+                            }
                             _ => {}
                         }
 
@@ -465,28 +595,72 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                             let left = code == KeyCode::Left;
                             // number of settings rows (must match draw_settings ordering)
                             let total = 11usize;
-                            let sel = if total > 0 { cmp::min(app.settings_cursor, total - 1) } else { 0 };
+                            let sel = if total > 0 {
+                                cmp::min(app.settings_cursor, total - 1)
+                            } else {
+                                0
+                            };
                             match sel {
-                                0 => { app.show_mode = !app.show_mode; }
-                                1 => { app.show_value = !app.show_value; }
-                                2 => { app.show_state = !app.show_state; }
-                                3 => { app.show_speed = !app.show_speed; }
-                                4 => { app.show_timer = !app.show_timer; }
-                                5 => { app.show_text = !app.show_text; }
-                                6 => { app.show_keyboard = !app.show_keyboard; }
+                                0 => {
+                                    app.show_mode = !app.show_mode;
+                                }
+                                1 => {
+                                    app.show_value = !app.show_value;
+                                }
+                                2 => {
+                                    app.show_state = !app.show_state;
+                                }
+                                3 => {
+                                    app.show_speed = !app.show_speed;
+                                }
+                                4 => {
+                                    app.show_timer = !app.show_timer;
+                                }
+                                5 => {
+                                    app.show_text = !app.show_text;
+                                }
+                                6 => {
+                                    app.show_keyboard = !app.show_keyboard;
+                                }
                                 7 => {
                                     app.keyboard_layout = match app.keyboard_layout {
-                                        crate::app::state::KeyboardLayout::Qwerty => if left { crate::app::state::KeyboardLayout::Qwertz } else { crate::app::state::KeyboardLayout::Azerty },
-                                        crate::app::state::KeyboardLayout::Azerty => if left { crate::app::state::KeyboardLayout::Qwerty } else { crate::app::state::KeyboardLayout::Dvorak },
-                                        crate::app::state::KeyboardLayout::Dvorak => if left { crate::app::state::KeyboardLayout::Azerty } else { crate::app::state::KeyboardLayout::Qwertz },
-                                        crate::app::state::KeyboardLayout::Qwertz => if left { crate::app::state::KeyboardLayout::Dvorak } else { crate::app::state::KeyboardLayout::Qwerty },
+                                        crate::app::state::KeyboardLayout::Qwerty => {
+                                            if left {
+                                                crate::app::state::KeyboardLayout::Qwertz
+                                            } else {
+                                                crate::app::state::KeyboardLayout::Azerty
+                                            }
+                                        }
+                                        crate::app::state::KeyboardLayout::Azerty => {
+                                            if left {
+                                                crate::app::state::KeyboardLayout::Qwerty
+                                            } else {
+                                                crate::app::state::KeyboardLayout::Dvorak
+                                            }
+                                        }
+                                        crate::app::state::KeyboardLayout::Dvorak => {
+                                            if left {
+                                                crate::app::state::KeyboardLayout::Azerty
+                                            } else {
+                                                crate::app::state::KeyboardLayout::Qwertz
+                                            }
+                                        }
+                                        crate::app::state::KeyboardLayout::Qwertz => {
+                                            if left {
+                                                crate::app::state::KeyboardLayout::Dvorak
+                                            } else {
+                                                crate::app::state::KeyboardLayout::Qwerty
+                                            }
+                                        }
                                     };
-                                    let _ = crate::app::config::write_keyboard_layout(match app.keyboard_layout {
-                                        crate::app::state::KeyboardLayout::Qwerty => "qwerty",
-                                        crate::app::state::KeyboardLayout::Azerty => "azerty",
-                                        crate::app::state::KeyboardLayout::Dvorak => "dvorak",
-                                        crate::app::state::KeyboardLayout::Qwertz => "qwertz",
-                                    });
+                                    let _ = crate::app::config::write_keyboard_layout(
+                                        match app.keyboard_layout {
+                                            crate::app::state::KeyboardLayout::Qwerty => "qwerty",
+                                            crate::app::state::KeyboardLayout::Azerty => "azerty",
+                                            crate::app::state::KeyboardLayout::Dvorak => "dvorak",
+                                            crate::app::state::KeyboardLayout::Qwertz => "qwertz",
+                                        },
+                                    );
                                 }
                                 8 => {
                                     let presets = crate::themes_presets::preset_names();
@@ -494,25 +668,51 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                                         // find current index
                                         let mut idx = 0usize;
                                         for (i, &n) in presets.iter().enumerate() {
-                                            if let Some(p) = crate::themes_presets::theme_by_name(n) {
-                                                    if p == app.theme { idx = i; break; }
+                                            if let Some(p) = crate::themes_presets::theme_by_name(n)
+                                            {
+                                                if p == app.theme {
+                                                    idx = i;
+                                                    break;
                                                 }
+                                            }
                                         }
-                                        if left { idx = (idx + presets.len() - 1) % presets.len(); } else { idx = (idx + 1) % presets.len(); }
-                                        if let Some(next) = crate::themes_presets::theme_by_name(presets[idx]) { app.theme = next; let _ = app.theme.save_to_config(); }
+                                        if left {
+                                            idx = (idx + presets.len() - 1) % presets.len();
+                                        } else {
+                                            idx = (idx + 1) % presets.len();
+                                        }
+                                        if let Some(next) =
+                                            crate::themes_presets::theme_by_name(presets[idx])
+                                        {
+                                            app.theme = next;
+                                            let _ = app.theme.save_to_config();
+                                        }
                                     }
                                 }
                                 9 => {
                                     // Keyboard switch: cycle available switch samples
                                     let list = crate::audio::list_switches();
                                     if !list.is_empty() {
-                                        let mut idx = list.iter().position(|s| s == &app.keyboard_switch).unwrap_or(0);
-                                        if left { idx = (idx + list.len() - 1) % list.len(); } else { idx = (idx + 1) % list.len(); }
+                                        let mut idx = list
+                                            .iter()
+                                            .position(|s| s == &app.keyboard_switch)
+                                            .unwrap_or(0);
+                                        if left {
+                                            idx = (idx + list.len() - 1) % list.len();
+                                        } else {
+                                            idx = (idx + 1) % list.len();
+                                        }
                                         app.keyboard_switch = list[idx].clone();
-                                        let _ = crate::app::config::write_keyboard_switch(&app.keyboard_switch);
+                                        let _ = crate::app::config::write_keyboard_switch(
+                                            &app.keyboard_switch,
+                                        );
                                     }
                                 }
-                                10 => { app.audio_enabled = !app.audio_enabled; let _ = crate::app::config::write_audio_enabled(app.audio_enabled); }
+                                10 => {
+                                    app.audio_enabled = !app.audio_enabled;
+                                    let _ =
+                                        crate::app::config::write_audio_enabled(app.audio_enabled);
+                                }
                                 _ => {}
                             }
                             continue 'main;
@@ -521,20 +721,30 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                         // Allow cycling keyboard layout with 'l'
                         if code == KeyCode::Char('l') {
                             app.keyboard_layout = match app.keyboard_layout {
-                                crate::app::state::KeyboardLayout::Qwerty => crate::app::state::KeyboardLayout::Azerty,
-                                crate::app::state::KeyboardLayout::Azerty => crate::app::state::KeyboardLayout::Dvorak,
-                                crate::app::state::KeyboardLayout::Dvorak => crate::app::state::KeyboardLayout::Qwertz,
-                                crate::app::state::KeyboardLayout::Qwertz => crate::app::state::KeyboardLayout::Qwerty,
+                                crate::app::state::KeyboardLayout::Qwerty => {
+                                    crate::app::state::KeyboardLayout::Azerty
+                                }
+                                crate::app::state::KeyboardLayout::Azerty => {
+                                    crate::app::state::KeyboardLayout::Dvorak
+                                }
+                                crate::app::state::KeyboardLayout::Dvorak => {
+                                    crate::app::state::KeyboardLayout::Qwertz
+                                }
+                                crate::app::state::KeyboardLayout::Qwertz => {
+                                    crate::app::state::KeyboardLayout::Qwerty
+                                }
                             };
                             // Clear any pressed key highlight so it doesn't point to an unrelated key
                             keyboard.pressed_key = None;
                             // Persist layout choice to config
-                            let _ = crate::app::config::write_keyboard_layout(match app.keyboard_layout {
-                                crate::app::state::KeyboardLayout::Qwerty => "qwerty",
-                                crate::app::state::KeyboardLayout::Azerty => "azerty",
-                                crate::app::state::KeyboardLayout::Dvorak => "dvorak",
-                                crate::app::state::KeyboardLayout::Qwertz => "qwertz",
-                            });
+                            let _ = crate::app::config::write_keyboard_layout(
+                                match app.keyboard_layout {
+                                    crate::app::state::KeyboardLayout::Qwerty => "qwerty",
+                                    crate::app::state::KeyboardLayout::Azerty => "azerty",
+                                    crate::app::state::KeyboardLayout::Dvorak => "dvorak",
+                                    crate::app::state::KeyboardLayout::Qwertz => "qwertz",
+                                },
+                            );
                             continue 'main;
                         }
 
@@ -554,23 +764,29 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                                     }
                                 }
                                 idx = (idx + 1) % presets.len();
-                                if let Some(next) = crate::themes_presets::theme_by_name(presets[idx]) {
+                                if let Some(next) =
+                                    crate::themes_presets::theme_by_name(presets[idx])
+                                {
                                     app.theme = next;
                                 }
                             }
                             continue 'main;
                         }
 
-                        // Cycle available keyboard switch samples with 'k'
-                        if code == KeyCode::Char('K') || code == KeyCode::Char('K') {
+                        // Cycle available keyboard switch samples with 'k' or 'K'
+                        if matches!(code, KeyCode::Char('k') | KeyCode::Char('K')) {
                             let list = crate::audio::list_switches();
                             if !list.is_empty() {
                                 // find current index
-                                let mut idx = list.iter().position(|s| s == &app.keyboard_switch).unwrap_or(0);
+                                let mut idx = list
+                                    .iter()
+                                    .position(|s| s == &app.keyboard_switch)
+                                    .unwrap_or(0);
                                 idx = (idx + 1) % list.len();
                                 app.keyboard_switch = list[idx].clone();
                                 // persist selection
-                                let _ = crate::app::config::write_keyboard_switch(&app.keyboard_switch);
+                                let _ =
+                                    crate::app::config::write_keyboard_switch(&app.keyboard_switch);
                                 // clear pressed highlight
                                 keyboard.pressed_key = None;
                             }
