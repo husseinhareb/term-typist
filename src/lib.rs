@@ -7,8 +7,10 @@ use crossterm::{
 };
 use std::{
     io,
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
+use std::fs::OpenOptions;
+use std::io::Write as _;
 use tui::{backend::CrosstermBackend, style::Style, widgets::Paragraph, Terminal};
 
 mod app; // src/app/mod.rs → state.rs, input.rs, config.rs
@@ -184,10 +186,27 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
             if show_caps_modal {
                 let area = f.size();
-                let label = "🔒  Caps Lock";
-                let content_width = (label.chars().count() as u16) + 6; // padding + borders
-                let w = content_width.min(area.width.saturating_sub(2)).max(16);
-                let h = 3u16;
+                let title = "🔒 Caps Lock is ON";
+                let hint = "Press Caps Lock to disable";
+
+                // Prepare centered two-line content with styling
+                let lines = vec![
+                    tui::text::Spans::from(vec![tui::text::Span::styled(
+                        title,
+                        tui::style::Style::default()
+                            .fg(app.theme.title.to_tui_color())
+                            .add_modifier(tui::style::Modifier::BOLD),
+                    )]),
+                    tui::text::Spans::from(vec![tui::text::Span::styled(
+                        hint,
+                        tui::style::Style::default().fg(app.theme.stats_label.to_tui_color()),
+                    )]),
+                ];
+
+                let max_line = title.chars().count().max(hint.chars().count()) as u16;
+                let content_width = max_line + 6; // padding + borders
+                let w = content_width.min(area.width.saturating_sub(2)).max(20);
+                let h = 5u16; // taller to accommodate two lines with padding
                 let x = (area.width.saturating_sub(w)) / 2;
                 let y = (area.height.saturating_sub(h)) / 2;
                 let rect = tui::layout::Rect::new(x, y, w, h);
@@ -195,19 +214,36 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 // Use accent background for visibility and contrasting foreground.
                 let block = tui::widgets::Block::default()
                     .borders(tui::widgets::Borders::ALL)
-                    .style(
-                        Style::default()
-                            .bg(app.theme.title_accent.to_tui_color())
-                            .fg(app.theme.background.to_tui_color()),
-                    );
+                    .border_style(Style::default().fg(app.theme.border.to_tui_color()))
+                    .style(Style::default().bg(app.theme.title_accent.to_tui_color()).fg(app.theme.title.to_tui_color()));
+
                 f.render_widget(block.clone(), rect);
                 let inner = block.inner(rect);
-                let para = tui::widgets::Paragraph::new(tui::text::Spans::from(vec![
-                    tui::text::Span::raw(label),
-                ]))
-                .style(Style::default().fg(app.theme.background.to_tui_color()));
+                let para = tui::widgets::Paragraph::new(lines)
+                    .alignment(tui::layout::Alignment::Center)
+                    .style(Style::default().bg(app.theme.title_accent.to_tui_color()).fg(app.theme.title.to_tui_color()));
                 f.render_widget(para, inner);
             }
+
+            // Debug: append caps detection state to a temp log so we can see
+            // whether opening/closing menus affects detection. This is a
+            // non-invasive file append used only for debugging.
+            let _ = (|| -> Result<(), std::io::Error> {
+                let ts = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs_f64()).unwrap_or(0.0);
+                let os_caps = if app.caps_detection_available { caps::is_caps_lock_on() } else { false };
+                let mut f = OpenOptions::new().create(true).append(true).open("/tmp/term_typist_caps.log")?;
+                let mode_str = match app.mode {
+                    Mode::View => "View",
+                    Mode::Insert => "Insert",
+                    Mode::Finished => "Finished",
+                    Mode::Profile => "Profile",
+                    Mode::Settings => "Settings",
+                    Mode::Menu => "Menu",
+                    Mode::Help => "Help",
+                };
+                writeln!(f, "{:.3} mode={} caps_detection_available={} os_caps={} app_caps={}", ts, mode_str, app.caps_detection_available, os_caps, app.caps_lock_on)?;
+                Ok(())
+            })();
 
             // (No startup test hint is shown; Caps Lock is driven by system detection,
             // terminal-reported CapsLock key, or heuristics.)
@@ -295,7 +331,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 // Only save the test to the DB if it was actually started (app.start.is_some()).
                 if code == KeyCode::Esc && modifiers.is_empty() {
                     match app.mode {
-                        Mode::Profile | Mode::Settings => {
+                        // When in small popups, Esc should just return to the main view.
+                        Mode::Profile | Mode::Settings | Mode::Menu | Mode::Help => {
                             app.mode = Mode::View;
                             continue 'main;
                         }
