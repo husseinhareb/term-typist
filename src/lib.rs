@@ -89,6 +89,11 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         false
     };
+    // Start a background poller to keep a fast in-process cached value so
+    // the Caps Lock modal appears/disappears responsively.
+    if app.caps_detection_available {
+        caps::start_polling(150);
+    }
     // No startup hint; Caps Lock state is driven by system detection or heuristics.
     let mut keyboard = Keyboard::new();
     // Initialize audio playback (background thread/stream)
@@ -178,8 +183,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             // flag for internal logic, but they won't trigger the modal unless the
             // system actually reports CapsLock on.
             let show_caps_modal = if app.caps_detection_available {
-                // Query the OS directly at render time to avoid stale/heuristic-driven state.
-                caps::is_caps_lock_on()
+                // Use the cached fast-read to make the UI responsive. The poller
+                // is started at app init and updates quickly in the background.
+                caps::cached_is_caps_lock_on()
             } else {
                 false
             };
@@ -211,18 +217,55 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 let y = (area.height.saturating_sub(h)) / 2;
                 let rect = tui::layout::Rect::new(x, y, w, h);
 
-                // Use accent background for visibility and contrasting foreground.
+                // Draw a subtle dim overlay so the modal feels modal and is readable
+                // even on bright backgrounds. Use the theme border color as a dimmer.
+                let overlay = Paragraph::new("")
+                    .style(Style::default().bg(app.theme.border.to_tui_color()));
+                f.render_widget(overlay.clone(), area);
+
+                // Draw a shadow by rendering a slightly offset dark block behind the modal
+                let shadow_rect = tui::layout::Rect::new(x.saturating_add(1), y.saturating_add(1), w, h);
+                let shadow = tui::widgets::Block::default().style(
+                    Style::default().bg(app.theme.border.to_tui_color()).fg(app.theme.border.to_tui_color()),
+                );
+                f.render_widget(shadow, shadow_rect);
+
+                // Use accent background for the modal with a clear border
                 let block = tui::widgets::Block::default()
                     .borders(tui::widgets::Borders::ALL)
-                    .border_style(Style::default().fg(app.theme.border.to_tui_color()))
+                    .border_style(Style::default().fg(app.theme.title.to_tui_color()))
                     .style(Style::default().bg(app.theme.title_accent.to_tui_color()).fg(app.theme.title.to_tui_color()));
 
                 f.render_widget(block.clone(), rect);
+
+                // Inner padding: draw paragraph inside block.inner()
                 let inner = block.inner(rect);
-                let para = tui::widgets::Paragraph::new(lines)
+                // create padded layout: two-line center, but leave a one-row pad at top and bottom
+                let pad_top = 1u16;
+                let pad_bottom = 1u16;
+                let content_height = inner.height.saturating_sub(pad_top + pad_bottom);
+                let content_y = inner.y.saturating_add(pad_top);
+
+                // Build paragraph with lines and distinct styles
+                let mut spans = Vec::new();
+                spans.push(tui::text::Spans::from(vec![tui::text::Span::styled(
+                    title,
+                    tui::style::Style::default()
+                        .fg(app.theme.title.to_tui_color())
+                        .add_modifier(tui::style::Modifier::BOLD),
+                )]));
+                spans.push(tui::text::Spans::from(vec![tui::text::Span::styled(
+                    hint,
+                    tui::style::Style::default().fg(app.theme.stats_label.to_tui_color()),
+                )]));
+
+                let para = tui::widgets::Paragraph::new(spans)
                     .alignment(tui::layout::Alignment::Center)
                     .style(Style::default().bg(app.theme.title_accent.to_tui_color()).fg(app.theme.title.to_tui_color()));
-                f.render_widget(para, inner);
+
+                // Ensure we render within the padded content rect
+                let content_rect = tui::layout::Rect::new(inner.x, content_y, inner.width, content_height);
+                f.render_widget(para, content_rect);
             }
 
             // Debug: append caps detection state to a temp log so we can see
