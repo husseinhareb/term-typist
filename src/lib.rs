@@ -165,9 +165,13 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     draw_settings(f, &app, &keyboard);
                 }
                 Mode::Menu => {
+                    // Paint the normal typing UI as the backdrop, then overlay the small menu modal
+                    draw(f, &app, &keyboard, cached_net, cached_acc);
                     crate::ui::menu::draw_menu(f, &app);
                 }
                 Mode::Help => {
+                    // Help is also a small overlay; keep the main UI visible behind it
+                    draw(f, &app, &keyboard, cached_net, cached_acc);
                     crate::ui::help::draw_help(f, &app);
                 }
                 _ => {

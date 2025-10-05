@@ -1,3 +1,4 @@
+// ui/menu.rs
 use std::cmp;
 use tui::{backend::Backend, widgets::{Block, Borders, Paragraph}, layout::Rect, style::{Style, Modifier, Color}, Frame};
 use crate::app::state::App;
