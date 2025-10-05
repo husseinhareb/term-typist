@@ -54,11 +54,15 @@ pub fn draw_menu<B: Backend>(f: &mut Frame<B>, app: &App) {
     for (idx, line) in art_lines.iter().enumerate() {
         let row_y = inner.y.saturating_add(idx as u16);
         if row_y >= inner.y.saturating_add(inner.height) { break; }
-        // Render the ascii art centered within the modal width
-        let line_rect = Rect::new(inner.x, row_y, inner.width, 1);
+        let line_w = line.len() as u16;
+        if line_w == 0 { continue; }
+        let x_off = if inner.width > line_w { (inner.width - line_w) / 2 } else { 0 };
+        let line_x = inner.x.saturating_add(x_off);
+        let line_w_clamped = cmp::min(line_w, inner.width);
+        let line_rect = Rect::new(line_x, row_y, line_w_clamped, 1);
         let art_para = Paragraph::new(*line)
             .style(Style::default().fg(app.theme.title.to_tui_color()))
-            .alignment(tui::layout::Alignment::Center);
+            .alignment(tui::layout::Alignment::Left);
         f.render_widget(art_para, line_rect);
     }
 
@@ -69,8 +73,14 @@ pub fn draw_menu<B: Backend>(f: &mut Frame<B>, app: &App) {
         .alignment(tui::layout::Alignment::Center);
     // place title in the gap row if there's at least one row available
     if inner.height > art_lines.len() as u16 {
-        let title_rect = Rect::new(inner.x, gap_top, inner.width, 1);
-        f.render_widget(title, title_rect);
+        let t = "Menu";
+        let tw = t.len() as u16;
+        let x_off = if inner.width > tw { (inner.width - tw) / 2 } else { 0 };
+        let title_rect = Rect::new(inner.x.saturating_add(x_off), gap_top, cmp::min(tw, inner.width), 1);
+        let title_para = Paragraph::new(t)
+            .style(Style::default().fg(app.theme.title.to_tui_color()).add_modifier(Modifier::BOLD))
+            .alignment(tui::layout::Alignment::Left);
+        f.render_widget(title_para, title_rect);
     }
 
     // compute the vertical region available for menu items: after the art + title
@@ -84,32 +94,39 @@ pub fn draw_menu<B: Backend>(f: &mut Frame<B>, app: &App) {
         if i as u16 >= available_rows { break; }
         let item_y = items_top.saturating_add(i as u16);
 
-        // Render each label centered across the full modal width so underlying
-        // UI remains visible except for the text itself.
-        let item_rect = Rect::new(inner.x, item_y, inner.width, 1);
+        // Render label only in a tight rect sized to the label text; center it
+        // by computing an x offset so we don't overwrite surrounding cells.
+        let lw = label.len() as u16;
+        if lw == 0 { continue; }
+        let x_off = if inner.width > lw { (inner.width - lw) / 2 } else { 0 };
+        let item_x = inner.x.saturating_add(x_off);
+        let item_w = cmp::min(lw, inner.width);
+        let item_rect = Rect::new(item_x, item_y, item_w, 1);
 
         let is_selected = (i == app.menu_cursor) || (app.menu_cursor > labels.len().saturating_sub(1) && i == 0);
 
         if is_selected {
-            // Selected label: accent color + bold
             let sel_txt = Paragraph::new(label)
                 .style(Style::default().fg(app.theme.title_accent.to_tui_color()).add_modifier(Modifier::BOLD))
-                .alignment(tui::layout::Alignment::Center);
+                .alignment(tui::layout::Alignment::Left);
             f.render_widget(sel_txt, item_rect);
         } else {
             let para = Paragraph::new(label)
                 .style(Style::default().fg(app.theme.foreground.to_tui_color()))
-                .alignment(tui::layout::Alignment::Center);
+                .alignment(tui::layout::Alignment::Left);
             f.render_widget(para, item_rect);
         }
     }
 
     // Render hint/footer inside modal (Esc/Enter)
     if inner.height >= 1 {
-        let hint = Paragraph::new("Enter: select   Esc: close")
+        let hint_txt = "Enter: select   Esc: close";
+        let hw = hint_txt.len() as u16;
+        let hx_off = if inner.width > hw { (inner.width - hw) / 2 } else { 0 };
+        let hint_rect = Rect::new(inner.x.saturating_add(hx_off), inner.y + inner.height.saturating_sub(1), cmp::min(hw, inner.width), 1);
+        let hint = Paragraph::new(hint_txt)
             .style(Style::default().fg(app.theme.stats_label.to_tui_color()))
-            .alignment(tui::layout::Alignment::Center);
-        let hint_rect = Rect::new(inner.x, inner.y + inner.height.saturating_sub(1), inner.width, 1);
+            .alignment(tui::layout::Alignment::Left);
         f.render_widget(hint, hint_rect);
     }
 }
