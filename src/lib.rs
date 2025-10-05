@@ -297,36 +297,69 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 // Rely on existing heuristics (uppercase letters typed without SHIFT imply CapsLock)
                 // and on periodic OS polling when `caps_detection_available` is true.
                 // ── SHIFT+NUMBER PANEL TOGGLES
-                match code {
-                    KeyCode::Char('!') => {
-                        app.show_mode = !app.show_mode;
-                        continue 'main;
+                // Accept the number key regardless of layout by mapping several
+                // common produced characters for the top-row number keys. Terminals
+                // often report either the digit (when Shift produces digit), the
+                // shifted symbol (e.g. '!' on QWERTY) or the unshifted AZERTY symbol
+                // (e.g. '&'). We try a best-effort mapping:
+                // 1) if a digit was produced use it (1..0 -> index 0..9)
+                // 2) otherwise if SHIFT modifier is present prefer QWERTY shifted-symbol mapping
+                // 3) otherwise prefer AZERTY unshifted mapping
+                if let KeyCode::Char(c) = code {
+                    // maps for shifted (QWERTY) symbols -> index
+                    // '!','@','#','$','%','^','&','*','(',')' => 0..9
+                    let shifted_map = |ch: char| match ch {
+                        '!' => Some(0),
+                        '@' => Some(1),
+                        '#' => Some(2),
+                        '$' => Some(3),
+                        '%' => Some(4),
+                        '^' => Some(5),
+                        '&' => Some(6),
+                        '*' => Some(7),
+                        '(' => Some(8),
+                        ')' => Some(9),
+                        _ => None,
+                    };
+
+                    // common AZERTY unshifted symbols for keys 1..0 -> index 0..9
+                    let azerty_map = |ch: char| match ch {
+                        '&' => Some(0),
+                        'é' => Some(1),
+                        '"' => Some(2),
+                        '\'' => Some(3),
+                        '(' => Some(4),
+                        '-' => Some(5),
+                        'è' => Some(6),
+                        '_' => Some(7),
+                        'ç' => Some(8),
+                        'à' => Some(9),
+                        _ => None,
+                    };
+
+                    // 1) digit wins (map '1'..'9','0' -> indices 0..9)
+                    let idx_opt: Option<usize> = if c.is_ascii_digit() {
+                        Some(if c == '0' { 9 } else { (c as u8 - b'1') as usize })
+                    } else if modifiers.contains(KeyModifiers::SHIFT) {
+                        // prefer shifted symbols mapping when shift reported
+                        shifted_map(c).or_else(|| azerty_map(c))
+                    } else {
+                        // prefer azerty/unshifted mapping, fallback to shifted_map
+                        azerty_map(c).or_else(|| shifted_map(c))
+                    };
+
+                    if let Some(idx) = idx_opt {
+                        match idx {
+                            0 => { app.show_mode = !app.show_mode; continue 'main; }
+                            1 => { app.show_value = !app.show_value; continue 'main; }
+                            2 => { app.show_state = !app.show_state; continue 'main; }
+                            3 => { app.show_speed = !app.show_speed; continue 'main; }
+                            4 => { app.show_timer = !app.show_timer; continue 'main; }
+                            5 => { app.show_text = !app.show_text; continue 'main; }
+                            6 => { app.show_keyboard = !app.show_keyboard; continue 'main; }
+                            _ => {}
+                        }
                     }
-                    KeyCode::Char('@') => {
-                        app.show_value = !app.show_value;
-                        continue 'main;
-                    }
-                    KeyCode::Char('#') => {
-                        app.show_state = !app.show_state;
-                        continue 'main;
-                    }
-                    KeyCode::Char('$') => {
-                        app.show_speed = !app.show_speed;
-                        continue 'main;
-                    }
-                    KeyCode::Char('%') => {
-                        app.show_timer = !app.show_timer;
-                        continue 'main;
-                    }
-                    KeyCode::Char('^') => {
-                        app.show_text = !app.show_text;
-                        continue 'main;
-                    }
-                    KeyCode::Char('&') => {
-                        app.show_keyboard = !app.show_keyboard;
-                        continue 'main;
-                    }
-                    _ => {}
                 }
 
                 // ── Ctrl-C quits
