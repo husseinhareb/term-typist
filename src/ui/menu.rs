@@ -8,17 +8,38 @@ pub fn draw_menu<B: Backend>(f: &mut Frame<B>, app: &App) {
 
                 // Small centered modal (not a full-page menu). We deliberately keep this
                 // compact so it overlays the current UI without replacing it.
+        // ASCII art header (centered at the top of the modal). Keep the lines
+        // exactly as provided so the title looks beautiful. The art is rendered
+        // with only foreground color so the underlying UI remains visible.
     let labels = ["Settings", "Help", "Quit"];
 
-                // Compute a compact modal size based on longest item + padding.
-                let padding_h = 4u16; // left/right padding
-                let padding_v = 1u16; // top/bottom padding
-                let longest = labels.iter().map(|s| s.len()).max().unwrap_or(6) as u16;
-                let w_calc = longest + padding_h * 2 + 2; // content + padding + borders
-                let max_w = area.width.saturating_sub(10);
-                let w = cmp::min(w_calc, max_w).max(12);
-                let h = (labels.len() as u16) + padding_v * 2 + 2; // items + padding + border
+        let ascii_art = r#"  __                                   __                 .__          __   
+    _/  |_  ___________  _____           _/  |_ ___.__.______ |__| _______/  |_ 
+    \   __\/ __ \_  __ \/     \   ______ \   __<   |  |\____ \|  |/  ___/\   __\
+     |  | \  ___/|  | \/  Y Y  \ /_____/  |  |  \___  ||  |_> >  |\___ \  |  |  
+     |__|  \___  >__|  |__|_|  /          |__|  / ____||   __/|__/____  > |__|  
+               \/            \/                 \/     |__|           \/        
+                                                                            
+                                                                            
+                                                                            
+                                                                            
+                                                                                "#;
 
+        let art_lines: Vec<&str> = ascii_art.lines().collect();
+
+        // Compute a compact modal size based on longest item or ascii art line + padding.
+        let padding_h = 4u16; // left/right padding
+        let padding_v = 1u16; // top/bottom padding
+        let longest_label = labels.iter().map(|s| s.len()).max().unwrap_or(6) as u16;
+        let longest_art = art_lines.iter().map(|s| s.len()).max().unwrap_or(0) as u16;
+        let longest = std::cmp::max(longest_label, longest_art);
+        let w_calc = longest + padding_h * 2 + 2; // content + padding + borders
+        let max_w = area.width.saturating_sub(10);
+        let w = cmp::min(w_calc, max_w).max(12);
+
+        // Height must accommodate ascii art lines, menu items, hint/footer and border
+        let art_h = art_lines.len() as u16;
+        let h = art_h + (labels.len() as u16) + padding_v * 2 + 2 + 1; // +1 small gap between art and items
                 let x = (area.width.saturating_sub(w)) / 2;
                 let y = (area.height.saturating_sub(h)) / 2;
                 let rect = Rect::new(x, y, w, h);
@@ -39,19 +60,38 @@ pub fn draw_menu<B: Backend>(f: &mut Frame<B>, app: &App) {
 
     // Render title at the top of the inner area (small accent title)
     let inner = modal_block.inner(rect);
+
+    // Render ascii art lines at the top of the inner area, centered horizontally.
+    for (idx, line) in art_lines.iter().enumerate() {
+        let row_y = inner.y.saturating_add(idx as u16);
+        if row_y >= inner.y.saturating_add(inner.height) { break; }
+        let line_w = line.len() as u16;
+        let x_off = if inner.width > line_w { (inner.width - line_w) / 2 } else { 0 };
+        let line_x = inner.x.saturating_add(x_off);
+        let line_w_clamped = cmp::min(line_w, inner.width);
+        if line_w_clamped == 0 { continue; }
+        let line_rect = Rect::new(line_x, row_y, line_w_clamped, 1);
+        let art_para = Paragraph::new(*line)
+            .style(Style::default().fg(app.theme.title.to_tui_color()))
+            .alignment(tui::layout::Alignment::Left);
+        f.render_widget(art_para, line_rect);
+    }
+
+    // After art, leave one empty row as a small gap before menu items (if space)
+    let gap_top = inner.y.saturating_add(art_lines.len() as u16);
     let title = Paragraph::new("Menu")
         .style(Style::default().fg(app.theme.title.to_tui_color()).add_modifier(Modifier::BOLD))
         .alignment(tui::layout::Alignment::Center);
-    // place title in the first row of inner
-    if inner.height >= 1 {
-        let title_rect = Rect::new(inner.x, inner.y, inner.width, 1);
+    // place title in the gap row if there's at least one row available
+    if inner.height > art_lines.len() as u16 {
+        let title_rect = Rect::new(inner.x, gap_top, inner.width, 1);
         f.render_widget(title, title_rect);
     }
 
-    // compute the vertical region available for menu items: between the
-    // title row and the hint/footer row. This allows showing as many items
-    // as fit inside the modal without overlapping title/hint.
-    let items_top = inner.y.saturating_add(1); // row just below title
+    // compute the vertical region available for menu items: after the art + title
+    // row and before the hint/footer row. This allows showing as many items as fit
+    // inside the modal without overlapping title/hint.
+    let items_top = inner.y.saturating_add(art_lines.len() as u16 + 1); // row just below title/gap
     let items_bottom = inner.y.saturating_sub(0).saturating_add(inner.height).saturating_sub(1); // row index of hint (exclusive)
     // number of available rows for items
     let available_rows = if items_bottom > items_top { items_bottom - items_top } else { 0 };
@@ -74,18 +114,9 @@ pub fn draw_menu<B: Backend>(f: &mut Frame<B>, app: &App) {
         let is_selected = (i == app.menu_cursor) || (app.menu_cursor > labels.len().saturating_sub(1) && i == 0);
 
         if is_selected {
-            // Draw a small capsule background behind the selected label so it's visible
-            let cap = Paragraph::new(" ")
-                .style(Style::default().bg(app.theme.title_accent.to_tui_color()));
-            // expand capsule by 1 column on both sides if possible
-            let cap_x = item_rect.x.saturating_sub(1);
-            let cap_w = (item_rect.width + 2).min(inner.width.saturating_sub(item_rect.x.saturating_sub(inner.x)));
-            let cap_rect = Rect::new(cap_x, item_rect.y, cap_w, 1);
-            f.render_widget(cap, cap_rect);
-
-            // Render label text with background-contrasting foreground
+            // Render selected label with accent foreground and bold, but no background
             let sel_txt = Paragraph::new(label)
-                .style(Style::default().fg(app.theme.background.to_tui_color()).add_modifier(Modifier::BOLD))
+                .style(Style::default().fg(app.theme.title_accent.to_tui_color()).add_modifier(Modifier::BOLD))
                 .alignment(tui::layout::Alignment::Center);
             f.render_widget(sel_txt, item_rect);
         } else {

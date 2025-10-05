@@ -200,18 +200,6 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 let hint = "Press Caps Lock to disable";
 
                 // Prepare centered two-line content with styling
-                let lines = vec![
-                    tui::text::Spans::from(vec![tui::text::Span::styled(
-                        title,
-                        tui::style::Style::default()
-                            .fg(app.theme.title.to_tui_color())
-                            .add_modifier(tui::style::Modifier::BOLD),
-                    )]),
-                    tui::text::Spans::from(vec![tui::text::Span::styled(
-                        hint,
-                        tui::style::Style::default().fg(app.theme.stats_label.to_tui_color()),
-                    )]),
-                ];
 
                 let max_line = title.chars().count().max(hint.chars().count()) as u16;
                 let content_width = max_line + 6; // padding + borders
