@@ -439,6 +439,58 @@ pub fn draw<B: Backend>(
     // Caps Lock modal overlay is rendered from lib.rs after screen-specific drawing.
 }
 
+/// Compute the horizontal split band (the border row) between the Text and Keyboard panes,
+/// if both are visible. Returns a 1-row Rect spanning the full bottom area width at the border.
+pub fn bottom_split_band<B: Backend>(f: &Frame<B>, app: &App) -> Option<tui::layout::Rect> {
+    // Mirror the same layout logic used in draw() to locate the bottom area and its chunks
+    if app.mode == Mode::Profile {
+        return None;
+    }
+    let size = f.size();
+
+    let mut v_cons = Vec::new();
+    if app.show_mode || app.show_value {
+        v_cons.push(Constraint::Length(3));
+    }
+    if app.show_state || app.show_speed || app.show_timer {
+        v_cons.push(Constraint::Length(3));
+    }
+    v_cons.push(Constraint::Min(3));
+
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(v_cons)
+        .split(size);
+
+    // bottom area is always the last row in our layout
+    let bottom_area = *rows.last()?;
+
+    let b_cons = if app.show_text && app.show_keyboard {
+        vec![Constraint::Percentage(42), Constraint::Percentage(58)]
+    } else if app.show_text {
+        vec![Constraint::Percentage(100)]
+    } else if app.show_keyboard {
+        vec![Constraint::Percentage(100)]
+    } else {
+        // no bottom content
+        return None;
+    };
+
+    let bottom_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(b_cons)
+        .split(bottom_area);
+
+    if app.show_text && app.show_keyboard {
+        // The split border is the last row of the top chunk (borders are drawn on the edges)
+        let top = bottom_chunks[0];
+        let y = top.y.saturating_add(top.height.saturating_sub(1));
+        Some(tui::layout::Rect::new(bottom_area.x, y, bottom_area.width, 1))
+    } else {
+        None
+    }
+}
+
 /// Draw the “finished” summary: left = WPM chart, right = stats.
 pub fn draw_finished<B: Backend>(f: &mut Frame<B>, app: &App) {
     let size = f.size();
