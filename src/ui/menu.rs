@@ -22,36 +22,73 @@ const BANNER_LINES: [&str; 6] = [
     " ╚═╝     ╚══════╝  ╚═╝  ╚═╝   ╚═╝     ╚═╝          ╚═╝        ╚═╝     ╚═╝        ╚═╝  ╚══════╝     ╚═╝   ",
 ];
 
+/// Small 3-row ASCII words (unselected), btop++ style
+const MENU_NORMAL: [[&str; 3]; 3] = [
+    // Options
+    [
+        "┌─┐┌─┐┌┬┐┬┌─┐┌┐┌┌─┐",
+        "│ │├─┘ │ ││ ││││└─┐",
+        "└─┘┴   ┴ ┴└─┘┘└┘└─┘",
+    ],
+    // Help
+    [
+        "┬ ┬┌─┐┬  ┌─┐",
+        "├─┤├┤ │  ├─┘",
+        "┴ ┴└─┘┴─┘┴  ",
+    ],
+    // Quit
+    [
+        "┌─┐ ┬ ┬ ┬┌┬┐",
+        "│─┼┐│ │ │ │ ",
+        "└─┘└└─┘ ┴ ┴ ",
+    ],
+];
 
+/// Small 3-row ASCII words (selected, double-line “╔═╗ … ╚═╝”)
+const MENU_SELECTED: [[&str; 3]; 3] = [
+    // Options
+    [
+        "╔═╗╔═╗╔╦╗╦╔═╗╔╗╔╔═╗",
+        "║ ║╠═╝ ║ ║║ ║║║║╚═╗",
+        "╚═╝╩   ╩ ╩╚═╝╝╚╝╚═╝",
+    ],
+    // Help
+    [
+        "╦ ╦╔═╗╦  ╔═╗",
+        "╠═╣╠╣ ║  ╠═╝",
+        "╩ ╩╚═╝╩═╝╩  ",
+    ],
+    // Quit
+    [
+        "╔═╗ ╦ ╦ ╦╔╦╗ ",
+        "║═╬╗║ ║ ║ ║  ",
+        "╚═╝╚╚═╝ ╩ ╩  ",
+    ],
+];
+
+/// Visual widths of each item (for centering)
+const MENU_WIDTH: [u16; 3] = [19, 12, 12];
+
+/// btop-like per-row colors
+// NOTE: selected/normal hard-coded color arrays removed. Menu now uses
+// theme-derived colors for all items (generated at runtime).
 
 pub fn draw_menu<B: Backend>(f: &mut Frame<B>, app: &App, _split_band: Option<Rect>) {
     let area = f.size();
 
-    // Menu content
-    let labels = ["Settings", "Help", "Quit"];
-    let title = "Menu";
-
-    // Compute content metrics
+    // Compute content width based on banner
     let banner_width = BANNER_LINES
         .iter()
         .map(|s| s.chars().count() as u16)
         .max()
         .unwrap_or(0);
 
-    let longest_label = labels.iter().map(|s| s.len() as u16).max().unwrap_or(0);
-    let title_w = title.len() as u16;
+    let padding_h = 4u16; // side breathing room
+    let w = (banner_width + padding_h * 2).clamp(12, area.width);
 
-    // Width we need to center everything nicely
-    let content_w = banner_width.max(longest_label).max(title_w);
-    let padding_h = 4u16; // side breathing room for nicer centering
-    let w = (content_w + padding_h * 2).clamp(12, area.width);
-
-    // Height calculation:
-    // banner rows + 1 gap + title + labels + top/bottom padding
-    let banner_h = BANNER_LINES.len() as u16;
-    let items_h = labels.len() as u16;
-    let padding_v = 2u16;
-    let h = (banner_h + 1 + 1 + items_h + padding_v).min(area.height);
+    // Height: 6 banner + 1 gap + 3 items (3 rows each) + 2 gaps between = 18
+    let needed_h = 6 + 1 + (3 * 3 + 2);
+    let h = (needed_h as u16).min(area.height);
 
     // Centered rect
     let x = area.width.saturating_sub(w) / 2;
@@ -61,12 +98,8 @@ pub fn draw_menu<B: Backend>(f: &mut Frame<B>, app: &App, _split_band: Option<Re
     // Row tracker
     let mut row_y = inner.y;
 
-    // 1) Draw banner lines (transparent: only paint non-space runs), colors are
-    // derived from the current theme so the banner matches the active theme.
-    // Generate a 6-step gradient from the theme title_accent color -> darker
-    // shades so the banner maintains the graded look but follows the theme.
+    // 1) Banner (transparent draw, theme gradient)
     let banner_colors_vec = generate_darker_shades(app.theme.title_accent.to_tui_color(), 6);
-
     for (i, line) in BANNER_LINES.iter().enumerate() {
         if row_y >= inner.y.saturating_add(inner.height) {
             break;
@@ -91,43 +124,50 @@ pub fn draw_menu<B: Backend>(f: &mut Frame<B>, app: &App, _split_band: Option<Re
         row_y = row_y.saturating_add(1);
     }
 
-    // 3) Title
-    if row_y < inner.y.saturating_add(inner.height) {
-        let tw = title.len() as u16;
-        let x_off = center_offset(inner.width, tw);
-        let title_rect = Rect::new(inner.x.saturating_add(x_off), row_y, tw.min(inner.width), 1);
-        let title_para = Paragraph::new(title)
-            .style(
-                Style::default()
-                    .fg(app.theme.title.to_tui_color())
-                    .add_modifier(Modifier::BOLD),
-            )
-            .alignment(Alignment::Left);
-        f.render_widget(title_para, title_rect);
-        row_y = row_y.saturating_add(1);
-    }
+    // 3) Items: Options / Help / Quit in 3-row blocks
+    let selected = app.menu_cursor % 3;
 
-    // 4) Items
-    let selected = normalize_index(app.menu_cursor, labels.len());
-    for (i, &label) in labels.iter().enumerate() {
-        if row_y >= inner.y.saturating_add(inner.height).saturating_sub(2) {
+    for i in 0..3 {
+        if row_y + 3 > inner.y.saturating_add(inner.height) {
             break;
         }
-        let lw = label.len() as u16;
-        let x_off = center_offset(inner.width, lw);
-        let rect = Rect::new(inner.x.saturating_add(x_off), row_y, lw.min(inner.width), 1);
 
-        let style = if i == selected {
-            Style::default()
-                .fg(app.theme.title_accent.to_tui_color())
-                .add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(app.theme.foreground.to_tui_color())
+        let item_w = MENU_WIDTH[i];
+        let x_off = center_offset(inner.width, item_w);
+        let base_rect_x = inner.x.saturating_add(x_off);
+
+        let lines = if i == selected { &MENU_SELECTED[i] } else { &MENU_NORMAL[i] };
+
+        // For each menu item select a base theme color and generate a 3-row
+        // shade gradient from it. This applies whether the item is selected
+        // or not, so Options/Help/Quit all follow the theme.
+        let base_color = match i {
+            0 => app.theme.title_accent.to_tui_color(), // Options
+            1 => app.theme.info.to_tui_color(),         // Help
+            2 => app.theme.error.to_tui_color(),        // Quit
+            _ => app.theme.foreground.to_tui_color(),
         };
+        let shades = generate_darker_shades(base_color, 3);
+        let mut cols_arr = [base_color; 3];
+        for (j, c) in shades.into_iter().enumerate().take(3) {
+            cols_arr[j] = c;
+        }
 
-        let para = Paragraph::new(label).style(style).alignment(Alignment::Left);
-        f.render_widget(para, rect);
-        row_y = row_y.saturating_add(1);
+        for r in 0..3 {
+            let rect = Rect::new(base_rect_x, row_y + r as u16, item_w.min(inner.width), 1);
+            let mut style = Style::default().fg(cols_arr[r]);
+            // keep a visual cue for selection (bold)
+            if i == selected {
+                style = style.add_modifier(Modifier::BOLD);
+            }
+            let para = Paragraph::new(lines[r]).style(style).alignment(Alignment::Left);
+            f.render_widget(para, rect);
+        }
+
+        row_y = row_y.saturating_add(3);
+        if i != 2 {
+            row_y = row_y.saturating_add(1); // gap between items
+        }
     }
 
     // no hint block
@@ -221,14 +261,6 @@ fn center_offset(container_w: u16, content_w: u16) -> u16 {
     }
 }
 
-fn normalize_index(cursor: usize, len: usize) -> usize {
-    if len == 0 {
-        0
-    } else {
-        cursor % len
-    }
-}
-
 /// Try to convert a `tui::style::Color` to an RGB triple. For named/light
 /// variants we approximate sensible RGB values so we can compute gradients.
 fn tui_color_to_rgb(c: Color) -> Option<(u8, u8, u8)> {
@@ -250,8 +282,8 @@ fn tui_color_to_rgb(c: Color) -> Option<(u8, u8, u8)> {
         LightBlue => Some((135, 206, 250)),
         LightMagenta => Some((255, 135, 255)),
         LightCyan => Some((85, 255, 255)),
-    White => Some((255, 255, 255)),
-    Indexed(_) | Reset => None,
+        White => Some((255, 255, 255)),
+        Indexed(_) | Reset => None,
     }
 }
 
@@ -267,8 +299,8 @@ fn generate_darker_shades(base: Color, n: usize) -> Vec<Color> {
     for i in 0..n {
         // t goes from 0.0 (original color) to 1.0 (black)
         let t = if n == 1 { 0.0 } else { (i as f32) / ((n - 1) as f32) };
-        // We want darker variants so we interpolate toward 0 with a slight easing
-        let factor = 1.0 - (t * 0.85); // leave a bit of brightness at the darkest
+        // Interpolate toward black with slight easing
+        let factor = 1.0 - (t * 0.85); // keep a bit of brightness at the darkest
         let r = (r0 as f32 * factor).round().clamp(0.0, 255.0) as u8;
         let g = (g0 as f32 * factor).round().clamp(0.0, 255.0) as u8;
         let b = (b0 as f32 * factor).round().clamp(0.0, 255.0) as u8;
