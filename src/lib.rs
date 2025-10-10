@@ -11,7 +11,14 @@ use std::{
 };
 use std::fs::OpenOptions;
 use std::io::Write as _;
-use tui::{backend::CrosstermBackend, style::Style, widgets::Paragraph, Terminal};
+use tui::{
+    backend::CrosstermBackend,
+    style::{Style, Modifier},
+    widgets::{Paragraph, Clear, Block, Borders, Wrap},
+    layout::Alignment,
+    text::{Span, Spans},
+    Terminal,
+};
 
 mod app; // src/app/mod.rs → state.rs, input.rs, config.rs
 mod audio;
@@ -197,68 +204,51 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
             if show_caps_modal {
                 let area = f.size();
-                let title = "🔒 Caps Lock is ON";
-                let hint = "Press Caps Lock to disable";
 
-                // Prepare centered two-line content with styling
+                // Keep it ASCII; emoji width varies across terminals.
+                let title = "CAPS LOCK IS ON";
+                let hint  = "Press Caps Lock to disable";
 
+                // Size + position
                 let max_line = title.chars().count().max(hint.chars().count()) as u16;
-                let content_width = max_line + 6; // padding + borders
-                let w = content_width.min(area.width.saturating_sub(2)).max(20);
-                let h = 5u16; // taller to accommodate two lines with padding
-                let x = (area.width.saturating_sub(w)) / 2;
-                let y = (area.height.saturating_sub(h)) / 2;
+                let w = (max_line + 8).clamp(28, area.width.saturating_sub(2));
+                let h = 5u16;
+                let x = area.x + (area.width.saturating_sub(w)) / 2;
+                let y = area.y + (area.height.saturating_sub(h)) / 2;
                 let rect = tui::layout::Rect::new(x, y, w, h);
 
-                // Draw a subtle dim overlay so the modal feels modal and is readable
-                // even on bright backgrounds. Use the theme border color as a dimmer.
-                let overlay = Paragraph::new("")
-                    .style(Style::default().bg(app.theme.border.to_tui_color()));
-                f.render_widget(overlay.clone(), area);
+                // 1) Clear the region so underlying UI can't bleed through
+                f.render_widget(Clear, rect);
 
-                // Draw a shadow by rendering a slightly offset dark block behind the modal
-                let shadow_rect = tui::layout::Rect::new(x.saturating_add(1), y.saturating_add(1), w, h);
-                let shadow = tui::widgets::Block::default().style(
-                    Style::default().bg(app.theme.border.to_tui_color()).fg(app.theme.border.to_tui_color()),
-                );
-                f.render_widget(shadow, shadow_rect);
-
-                // Use accent background for the modal with a clear border
-                let block = tui::widgets::Block::default()
-                    .borders(tui::widgets::Borders::ALL)
-                    .border_style(Style::default().fg(app.theme.title.to_tui_color()))
-                    .style(Style::default().bg(app.theme.title_accent.to_tui_color()).fg(app.theme.title.to_tui_color()));
-
+                // 2) Modal box – neutral bg, accent border
+                let block = Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(app.theme.title_accent.to_tui_color()))
+                    .style(Style::default().bg(app.theme.background.to_tui_color()));
                 f.render_widget(block.clone(), rect);
 
-                // Inner padding: draw paragraph inside block.inner()
+                // 4) Inner content (centered, two lines)
                 let inner = block.inner(rect);
-                // create padded layout: two-line center, but leave a one-row pad at top and bottom
-                let pad_top = 1u16;
-                let pad_bottom = 1u16;
-                let content_height = inner.height.saturating_sub(pad_top + pad_bottom);
-                let content_y = inner.y.saturating_add(pad_top);
+                f.render_widget(Clear, inner); // clear inner too, avoids leftover chars on short lines
 
-                // Build paragraph with lines and distinct styles
-                let mut spans = Vec::new();
-                spans.push(tui::text::Spans::from(vec![tui::text::Span::styled(
-                    title,
-                    tui::style::Style::default()
-                        .fg(app.theme.title.to_tui_color())
-                        .add_modifier(tui::style::Modifier::BOLD),
-                )]));
-                spans.push(tui::text::Spans::from(vec![tui::text::Span::styled(
-                    hint,
-                    tui::style::Style::default().fg(app.theme.stats_label.to_tui_color()),
-                )]));
+                let lines = vec![
+                    Spans::from(Span::styled(
+                        title,
+                        Style::default()
+                            .fg(app.theme.title.to_tui_color())
+                            .add_modifier(Modifier::BOLD),
+                    )),
+                    Spans::from(Span::styled(
+                        hint,
+                        Style::default().fg(app.theme.stats_label.to_tui_color()),
+                    )),
+                ];
 
-                let para = tui::widgets::Paragraph::new(spans)
-                    .alignment(tui::layout::Alignment::Center)
-                    .style(Style::default().bg(app.theme.title_accent.to_tui_color()).fg(app.theme.title.to_tui_color()));
-
-                // Ensure we render within the padded content rect
-                let content_rect = tui::layout::Rect::new(inner.x, content_y, inner.width, content_height);
-                f.render_widget(para, content_rect);
+                let para = Paragraph::new(lines)
+                    .alignment(Alignment::Center)
+                    .wrap(Wrap { trim: true })
+                    .style(Style::default().bg(app.theme.background.to_tui_color()));
+                f.render_widget(para, inner);
             }
 
             // Debug: append caps detection state to a temp log so we can see

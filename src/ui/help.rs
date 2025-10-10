@@ -1,6 +1,11 @@
-// src/ui/help.rs
-
-use tui::{backend::Backend, widgets::{Block, Borders, Paragraph, Wrap}, layout::{Alignment, Rect}, style::{Style, Modifier}, text::{Span, Spans, Text}, Frame};
+use tui::{
+    backend::Backend,
+    layout::{Alignment, Rect},
+    style::{Modifier, Style},
+    text::{Span, Spans, Text},
+    widgets::{Block, Borders, Paragraph, Wrap, Clear}, // + Clear
+    Frame,
+};
 use crate::app::state::App;
 
 pub fn draw_help<B: Backend>(f: &mut Frame<B>, app: &App) {
@@ -11,13 +16,26 @@ pub fn draw_help<B: Backend>(f: &mut Frame<B>, app: &App) {
     let y = (area.height.saturating_sub(h)) / 2;
     let rect = Rect::new(x, y, w, h);
 
-    let block = Block::default().borders(Borders::ALL).title("Help").style(Style::default().bg(app.theme.background.to_tui_color()).fg(app.theme.foreground.to_tui_color()));
+    // 1) Clear the popup region so nothing below shows through
+    f.render_widget(Clear, rect);
+
+    // 2) Draw the popup box (borders only)
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title("Help")
+        .border_style(Style::default().fg(app.theme.border.to_tui_color()))
+        .style(Style::default().bg(app.theme.background.to_tui_color()));
     f.render_widget(block.clone(), rect);
 
+    // 3) Fill the entire inner area with a solid background
     let inner = block.inner(rect);
+    f.render_widget(
+        Paragraph::new("") // empty text, just to paint bg on every cell
+            .style(Style::default().bg(app.theme.background.to_tui_color())),
+        inner,
+    );
 
-    // Build the same bindings list we discovered in the codebase and render
-    // with styled key labels (accent color) and normal text for descriptions.
+    // 4) Build content (keys + descriptions)
     let bindings = vec![
         ("F1", "Open menu"),
         ("Tab", "Toggle menu (open/close)"),
@@ -38,22 +56,31 @@ pub fn draw_help<B: Backend>(f: &mut Frame<B>, app: &App) {
         ("Up / Down", "Navigate up/down in lists"),
         ("PageUp / PageDown", "Page navigation in lists"),
         ("Home / End", "Jump to start/end in lists"),
-        ("! @ # $ % ^ &", "Toggle small UI panels (shift+1..7)")
+        ("! @ # $ % ^ &", "Toggle small UI panels (shift+1..7)"),
     ];
 
-    let mut text_spans: Vec<Spans> = Vec::new();
-    for (key, desc) in bindings.iter() {
+    let mut rows: Vec<Spans> = Vec::with_capacity(bindings.len());
+    for (key, desc) in bindings {
         let key_span = Span::styled(
             format!("{:<12}", key),
-            Style::default().fg(app.theme.title_accent.to_tui_color()).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(app.theme.title_accent.to_tui_color())
+                .add_modifier(Modifier::BOLD),
         );
-        let desc_span = Span::styled(
-            desc.to_string(),
-            Style::default().fg(app.theme.foreground.to_tui_color()),
-        );
-        text_spans.push(Spans::from(vec![key_span, Span::raw("  "), desc_span]));
+        let desc_span =
+            Span::styled(desc, Style::default().fg(app.theme.foreground.to_tui_color()));
+        rows.push(Spans::from(vec![key_span, Span::raw("  "), desc_span]));
     }
 
-    let para = Paragraph::new(Text::from(text_spans)).wrap(Wrap { trim: true }).alignment(Alignment::Left);
+    // 5) Render the help text with an explicit bg, on top of the filler
+    let para = Paragraph::new(Text::from(rows))
+        .style(
+            Style::default()
+                .bg(app.theme.background.to_tui_color())
+                .fg(app.theme.foreground.to_tui_color()),
+        )
+        .alignment(Alignment::Left)
+        .wrap(Wrap { trim: true });
+
     f.render_widget(para, inner);
 }
