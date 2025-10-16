@@ -156,11 +156,24 @@ pub fn draw_menu<B: Backend>(f: &mut Frame<B>, app: &App, _split_band: Option<Re
         for r in 0..3 {
             let rect = Rect::new(base_rect_x, row_y + r as u16, item_w.min(inner.width), 1);
             let mut style = Style::default().fg(cols_arr[r]);
-            // keep a visual cue for selection (bold)
+
+            // For the help item we center the small ascii-art and provide a
+            // slightly different selection cue (bold + underlined) to make it
+            // stand out as an informational entry.
+            let mut alignment = Alignment::Left;
+            if i == 1 {
+                alignment = Alignment::Center;
+            }
+
+            // keep a visual cue for selection (bold). Help gets an extra
+            // underline when selected to emphasise it.
             if i == selected {
+                // Keep bold as the primary selection cue. Remove UNDERLINED
+                // so the Help item no longer shows an underline behind it.
                 style = style.add_modifier(Modifier::BOLD);
             }
-            let para = Paragraph::new(lines[r]).style(style).alignment(Alignment::Left);
+
+            let para = Paragraph::new(lines[r]).style(style).alignment(alignment);
             f.render_widget(para, rect);
         }
 
@@ -170,7 +183,19 @@ pub fn draw_menu<B: Backend>(f: &mut Frame<B>, app: &App, _split_band: Option<Re
         }
     }
 
-    // no hint block
+    // small hint block under the menu to explain controls
+    if row_y < inner.y.saturating_add(inner.height) {
+        // Single hint line centered. Use a muted theme color so it doesn't
+        // compete with the menu items.
+        let hint_txt = "Use ↑/↓ to select • Enter to open • Esc to exit";
+        let hint_color = app.theme.stats_label.to_tui_color();
+        let hint_style = Style::default().fg(hint_color).add_modifier(Modifier::ITALIC);
+        let hint_x = inner.x;
+        let hint_w = inner.width;
+        let rect = Rect::new(hint_x, row_y, hint_w, 1);
+        let para = Paragraph::new(hint_txt).style(hint_style).alignment(Alignment::Center);
+        f.render_widget(para, rect);
+    }
 }
 
 /// Render a single line as multiple contiguous non-space runs so that background
@@ -299,8 +324,12 @@ fn generate_darker_shades(base: Color, n: usize) -> Vec<Color> {
     for i in 0..n {
         // t goes from 0.0 (original color) to 1.0 (black)
         let t = if n == 1 { 0.0 } else { (i as f32) / ((n - 1) as f32) };
-        // Interpolate toward black with slight easing
-        let factor = 1.0 - (t * 0.85); // keep a bit of brightness at the darkest
+    // Interpolate toward black with slight easing. Avoid producing
+    // near-black colors for the darkest shade (which makes the
+    // bottom row of menu words look 'black' on many terminals).
+    // Keep a reasonable minimum brightness so the glyphs remain
+    // visible against dark backgrounds.
+    let factor = 1.0 - (t * 0.65); // darkest keeps ~35% brightness
         let r = (r0 as f32 * factor).round().clamp(0.0, 255.0) as u8;
         let g = (g0 as f32 * factor).round().clamp(0.0, 255.0) as u8;
         let b = (b0 as f32 * factor).round().clamp(0.0, 255.0) as u8;

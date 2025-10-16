@@ -1,9 +1,9 @@
 use tui::{
     backend::Backend,
-    layout::{Alignment, Rect},
+    layout::{Alignment, Rect, Layout, Constraint, Direction},
     style::{Modifier, Style},
     text::{Span, Spans, Text},
-    widgets::{Block, Borders, Paragraph, Wrap, Clear}, // + Clear
+    widgets::{Block, Borders, Paragraph, Wrap, Clear, Table, Row, Cell}, // + Clear
     Frame,
 };
 use crate::app::state::App;
@@ -19,23 +19,38 @@ pub fn draw_help<B: Backend>(f: &mut Frame<B>, app: &App) {
     // 1) Clear the popup region so nothing below shows through
     f.render_widget(Clear, rect);
 
-    // 2) Draw the popup box (borders only)
+    // 2) Draw the popup box (borders only) and paint background
     let block = Block::default()
         .borders(Borders::ALL)
-        .title("Help")
         .border_style(Style::default().fg(app.theme.border.to_tui_color()))
         .style(Style::default().bg(app.theme.background.to_tui_color()));
     f.render_widget(block.clone(), rect);
 
-    // 3) Fill the entire inner area with a solid background
+    // inner area where we'll place header, table and footer
     let inner = block.inner(rect);
-    f.render_widget(
-        Paragraph::new("") // empty text, just to paint bg on every cell
-            .style(Style::default().bg(app.theme.background.to_tui_color())),
-        inner,
-    );
 
-    // 4) Build content (keys + descriptions)
+    // split inner into header (3), body (remaining - 4), footer (1)
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(1)
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Min(4),
+            Constraint::Length(1),
+        ])
+        .split(inner);
+
+    // Header: centered title with accent color
+    let title = Paragraph::new(Span::styled(
+        "Help — Keybindings",
+        Style::default()
+            .fg(app.theme.title_accent.to_tui_color())
+            .add_modifier(Modifier::BOLD),
+    ))
+    .alignment(Alignment::Center);
+    f.render_widget(title, chunks[0]);
+
+    // Build content (keys + descriptions)
     let bindings = vec![
         ("F1", "Open menu"),
         ("Tab", "Toggle menu (open/close)"),
@@ -59,28 +74,37 @@ pub fn draw_help<B: Backend>(f: &mut Frame<B>, app: &App) {
         ("! @ # $ % ^ &", "Toggle small UI panels (shift+1..7)"),
     ];
 
-    let mut rows: Vec<Spans> = Vec::with_capacity(bindings.len());
+    // Prepare table rows
+    let mut table_rows: Vec<Row> = Vec::with_capacity(bindings.len());
     for (key, desc) in bindings {
-        let key_span = Span::styled(
-            format!("{:<12}", key),
+        let key_cell = Cell::from(Span::styled(
+            key.to_string(),
             Style::default()
                 .fg(app.theme.title_accent.to_tui_color())
                 .add_modifier(Modifier::BOLD),
-        );
-        let desc_span =
-            Span::styled(desc, Style::default().fg(app.theme.foreground.to_tui_color()));
-        rows.push(Spans::from(vec![key_span, Span::raw("  "), desc_span]));
+        ));
+        let desc_cell = Cell::from(Span::styled(
+            desc.to_string(),
+            Style::default().fg(app.theme.foreground.to_tui_color()),
+        ));
+        table_rows.push(Row::new(vec![key_cell, desc_cell]));
     }
 
-    // 5) Render the help text with an explicit bg, on top of the filler
-    let para = Paragraph::new(Text::from(rows))
-        .style(
-            Style::default()
-                .bg(app.theme.background.to_tui_color())
-                .fg(app.theme.foreground.to_tui_color()),
-        )
-        .alignment(Alignment::Left)
-        .wrap(Wrap { trim: true });
+    let table = Table::new(table_rows)
+        .block(Block::default())
+        .widths(&[Constraint::Length(18), Constraint::Min(10)])
+        .column_spacing(2)
+        .style(Style::default().fg(app.theme.foreground.to_tui_color()));
 
-    f.render_widget(para, inner);
+    f.render_widget(table, chunks[1]);
+
+    // Footer: small centered hint using muted theme color
+    let footer = Paragraph::new(Span::styled(
+        "Press Esc to close",
+        Style::default()
+            .fg(app.theme.stats_label.to_tui_color())
+            .add_modifier(Modifier::ITALIC),
+    ))
+    .alignment(Alignment::Center);
+    f.render_widget(footer, chunks[2]);
 }
