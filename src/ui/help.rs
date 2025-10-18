@@ -3,7 +3,7 @@ use tui::{
     layout::{Alignment, Rect, Layout, Constraint, Direction},
     style::{Modifier, Style},
     text::{Span, Spans, Text},
-    widgets::{Block, Borders, Paragraph, Wrap, Clear, Table, Row, Cell}, // + Clear
+    widgets::{Block, Borders, Paragraph, Wrap, Clear}, // + Clear
     Frame,
 };
 use crate::app::state::App;
@@ -74,29 +74,26 @@ pub fn draw_help<B: Backend>(f: &mut Frame<B>, app: &App) {
         ("! @ # $ % ^ &", "Toggle small UI panels (shift+1..7)"),
     ];
 
-    // Prepare table rows
-    let mut table_rows: Vec<Row> = Vec::with_capacity(bindings.len());
+    // Build wrapped paragraph rows so descriptions will wrap inside the
+    // modal instead of being clipped by the Table widget.
+    let mut rows: Vec<Spans> = Vec::with_capacity(bindings.len());
     for (key, desc) in bindings {
-        let key_cell = Cell::from(Span::styled(
-            key.to_string(),
+        let key_span = Span::styled(
+            format!("{:<18}", key),
             Style::default()
                 .fg(app.theme.title_accent.to_tui_color())
                 .add_modifier(Modifier::BOLD),
-        ));
-        let desc_cell = Cell::from(Span::styled(
-            desc.to_string(),
-            Style::default().fg(app.theme.foreground.to_tui_color()),
-        ));
-        table_rows.push(Row::new(vec![key_cell, desc_cell]));
+        );
+        let desc_span = Span::styled(desc.to_string(), Style::default().fg(app.theme.foreground.to_tui_color()));
+        rows.push(Spans::from(vec![key_span, Span::raw("  "), desc_span]));
     }
 
-    let table = Table::new(table_rows)
-        .block(Block::default())
-        .widths(&[Constraint::Length(18), Constraint::Min(10)])
-        .column_spacing(2)
-        .style(Style::default().fg(app.theme.foreground.to_tui_color()));
+    let para = Paragraph::new(Text::from(rows))
+        .style(Style::default().bg(app.theme.background.to_tui_color()).fg(app.theme.foreground.to_tui_color()))
+        .alignment(Alignment::Left)
+        .wrap(Wrap { trim: true });
 
-    f.render_widget(table, chunks[1]);
+    f.render_widget(para, chunks[1]);
 
     // Footer: small centered hint using muted theme color
     let footer = Paragraph::new(Span::styled(
