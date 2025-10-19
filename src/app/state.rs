@@ -20,6 +20,7 @@ pub enum Mode {
         Settings,
         Menu,
         Help,
+        Leaderboard,
 }
 
 /// Supported keyboard layouts for on-screen keyboard and input mapping.

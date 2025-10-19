@@ -6,3 +6,4 @@ pub mod profile;
 pub mod settings;
 pub mod menu;
 pub mod help;
+pub mod leaderboard;

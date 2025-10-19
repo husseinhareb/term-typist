@@ -32,6 +32,7 @@ mod ui; // src/ui/mod.rs → draw.rs, keyboard.rs
 mod wpm; // src/wpm.rs // src/audio.rs
 
 use crate::ui::profile::draw_profile;
+use crate::ui::leaderboard::draw_leaderboard;
 use crate::ui::settings::draw_settings;
 use app::input::handle_nav;
 use app::state::{App, Mode, Status};
@@ -167,6 +168,11 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     // draw_profile now accepts (&mut Frame, &Connection, &Theme)
                     draw_profile(f, &conn, &app.theme);
                 }
+                Mode::Leaderboard => {
+                    // show the typing UI in the background and overlay the leaderboard modal
+                    draw(f, &app, &keyboard, cached_net, cached_acc);
+                    draw_leaderboard(f, &conn, &app.theme);
+                }
                 Mode::Settings => {
                     // draw_settings should render your settings UI
                     draw_settings(f, &app, &keyboard);
@@ -263,6 +269,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     Mode::Insert => "Insert",
                     Mode::Finished => "Finished",
                     Mode::Profile => "Profile",
+                    Mode::Leaderboard => "Leaderboard",
                     Mode::Settings => "Settings",
                     Mode::Menu => "Menu",
                     Mode::Help => "Help",
@@ -391,7 +398,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 if code == KeyCode::Esc && modifiers.is_empty() {
                     match app.mode {
                         // When in small popups, Esc should just return to the main view.
-                        Mode::Profile | Mode::Settings | Mode::Menu | Mode::Help => {
+                        Mode::Profile | Mode::Settings | Mode::Menu | Mode::Help | Mode::Leaderboard => {
                             app.mode = Mode::View;
                             continue 'main;
                         }
@@ -458,6 +465,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     if lc == 's' && app.mode == Mode::View {
                         app.mode = Mode::Settings;
+                        continue 'main;
+                    }
+                    if lc == 'l' && app.mode == Mode::View {
+                        app.mode = Mode::Leaderboard;
                         continue 'main;
                     }
                 }
@@ -651,6 +662,11 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                         // Handle profile navigation keys
                         use crate::ui::profile::handle_profile_key;
                         handle_profile_key(code);
+                    }
+
+                    Mode::Leaderboard => {
+                        use crate::ui::leaderboard::handle_leaderboard_key;
+                        handle_leaderboard_key(code);
                     }
 
                     Mode::Settings => {
