@@ -500,7 +500,21 @@ pub fn draw_finished<B: Backend>(f: &mut Frame<B>, app: &App) {
         .split(size);
 
     // Left: WPM chart
-    graph::draw_wpm_chart(f, chunks[0], &app.samples, &app.theme);
+    // Build synthetic error timestamps distributed across the test duration so
+    // they can be shown as markers on the graph. We don't store per-error
+    // timestamps, so we distribute them evenly as a visual hint of when errors
+    // occurred during the test.
+    let mut error_times: Vec<u64> = Vec::new();
+    if app.incorrect_chars > 0 {
+        let dur_s = app.elapsed_secs().max(1) as f64;
+        let n = app.incorrect_chars;
+        for i in 0..n {
+            let frac = (i as f64 + 1.0) / (n as f64 + 1.0);
+            let t = (frac * dur_s).round() as u64;
+            error_times.push(t);
+        }
+    }
+    graph::draw_wpm_chart(f, chunks[0], &app.samples, &app.theme, if error_times.is_empty() { None } else { Some(&error_times) });
 
     // Right: stats
     // Align net and raw WPM to the same time window (test start -> end) so raw >= net.

@@ -485,7 +485,8 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection, theme: &The
         }
     }
 
-    graph::draw_wpm_chart(f, bottom[0], &data, theme);
+    // Profile chart aggregates do not include per-test error timestamps, so pass None
+    graph::draw_wpm_chart(f, bottom[0], &data, theme, None);
 
     // Scrollable Recent Tests table
         let sql = format!(
