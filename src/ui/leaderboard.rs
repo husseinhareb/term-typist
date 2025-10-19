@@ -44,6 +44,11 @@ pub fn handle_leaderboard_key(code: KeyCode) {
     }
 }
 
+/// Return the current leaderboard cursor (absolute index into the TOP_N ordering).
+pub fn leaderboard_cursor() -> usize {
+    LEADERBOARD_CURSOR.load(Ordering::Relaxed)
+}
+
 pub fn draw_leaderboard<B: Backend>(f: &mut Frame<B>, conn: &Connection, theme: &Theme) {
     let area = f.size();
     // modal size: 80% width, up to 18 rows height or area.height - 6

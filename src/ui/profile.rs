@@ -74,6 +74,11 @@ pub fn handle_profile_key(code: KeyCode) {
     }
 }
 
+/// Return the current RECENT_CURSOR value (absolute index into tests ordered by started_at DESC).
+pub fn recent_cursor() -> usize {
+    RECENT_CURSOR.load(Ordering::Relaxed)
+}
+
 /// Simple thousands separator for positive integers.
 fn sep_int(mut n: u64) -> String {
     if n == 0 {
