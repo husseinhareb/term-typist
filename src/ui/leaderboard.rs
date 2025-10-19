@@ -67,13 +67,14 @@ pub fn draw_leaderboard<B: Backend>(f: &mut Frame<B>, conn: &Connection, theme: 
 
     let inner = block.inner(rect);
 
-    // Fetch top N tests ordered by net WPM
+    // Fetch top N tests ordered by net WPM and include extra columns
     let sql = format!(
         "SELECT t.started_at, t.wpm,
+                t.duration_ms, t.correct_chars, t.incorrect_chars,
                 COALESCE((t.correct_chars+t.incorrect_chars)*1.0/5.0 / NULLIF(t.duration_ms/60000.0,0), 0.0) AS raw,
                 t.accuracy,
                 COALESCE(100.0*MIN(s.wpm)/NULLIF(MAX(s.wpm),0), 0.0) AS consistency,
-                t.mode, t.target_value
+                t.mode
          FROM tests t
          LEFT JOIN samples s ON s.test_id=t.id
          GROUP BY t.id
@@ -95,22 +96,42 @@ pub fn draw_leaderboard<B: Backend>(f: &mut Frame<B>, conn: &Connection, theme: 
                 .unwrap_or(ts.clone());
             Ok((
                 dt_str,
-                r.get::<_, f64>(1)?,
-                r.get::<_, f64>(2)?,
-                r.get::<_, f64>(3)?,
-                r.get::<_, f64>(4)?,
-                format!("{} {}", r.get::<_, String>(5)?, r.get::<_, i64>(6)?),
+                r.get::<_, f64>(1)?,               // net wpm
+                r.get::<_, i64>(2)?,               // duration_ms
+                r.get::<_, i64>(3)?,               // correct_chars
+                r.get::<_, i64>(4)?,               // incorrect_chars
+                r.get::<_, f64>(5)?,               // raw
+                r.get::<_, f64>(6)?,               // accuracy
+                r.get::<_, f64>(7)?,               // consistency
+                r.get::<_, String>(8)?,            // mode
             ))
         })
         .unwrap()
         .filter_map(Result::ok)
         .collect();
 
-    // Build table rows
+    // Build table rows (include rank, duration, correct/incorrect, truncated target)
     let rows: Vec<Row> = items
         .iter()
-        .map(|(d, net, raw, acc, cons, m)| {
-            Row::new(vec![Cell::from(d.as_str()), Cell::from(format!("{:.1}", net)), Cell::from(format!("{:.1}", raw)), Cell::from(format!("{:.1}%", acc)), Cell::from(format!("{:.1}%", cons)), Cell::from(m.as_str())])
+        .enumerate()
+        .map(|(idx, (d, net, duration_ms, correct, incorrect, raw, acc, cons, mode))| {
+            // duration formatting mm:ss
+            let dur_s = (*duration_ms as u64).saturating_div(1000);
+            let mins = dur_s / 60;
+            let secs = dur_s % 60;
+            let dur_str = format!("{:02}:{:02}", mins, secs);
+            Row::new(vec![
+                Cell::from(format!("#{}", idx + 1)),
+                Cell::from(d.as_str()),
+                Cell::from(format!("{:.1}", net)),
+                Cell::from(dur_str),
+                Cell::from(format!("{}", correct)),
+                Cell::from(format!("{}", incorrect)),
+                Cell::from(format!("{:.1}", raw)),
+                Cell::from(format!("{:.1}%", acc)),
+                Cell::from(format!("{:.1}%", cons)),
+                Cell::from(mode.as_str()),
+            ])
         })
         .collect();
 
@@ -128,15 +149,19 @@ pub fn draw_leaderboard<B: Backend>(f: &mut Frame<B>, conn: &Connection, theme: 
     state.select(sel);
 
     let table = Table::new(rows)
-        .header(Row::new(vec!["Started At", "WPM", "Raw", "Acc", "Cons", "Mode"]).style(Style::default().fg(theme.stats_value.to_tui_color())))
+        .header(Row::new(vec!["#","Started At","WPM","Dur","Corr","Err","Raw","Acc","Cons","Mode"]).style(Style::default().fg(theme.stats_value.to_tui_color())))
         .block(Block::default().borders(Borders::NONE))
         .widths(&[
+            tui::layout::Constraint::Length(4),
             tui::layout::Constraint::Length(19),
+            tui::layout::Constraint::Length(6),
+            tui::layout::Constraint::Length(7),
+            tui::layout::Constraint::Length(6),
+            tui::layout::Constraint::Length(6),
             tui::layout::Constraint::Length(6),
             tui::layout::Constraint::Length(6),
             tui::layout::Constraint::Length(8),
             tui::layout::Constraint::Length(10),
-            tui::layout::Constraint::Min(10),
         ])
         .column_spacing(1)
         .highlight_style(Style::default().bg(theme.info.to_tui_color()))
