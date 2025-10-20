@@ -39,14 +39,57 @@ pub fn draw_wpm_chart<B: Backend>(
         .data(&pts);
 
     // ---- Error markers (Monkeytype-style) ----
-    // Aggregate by second.
+    // Aggregate by second. Auto-detect whether incoming timestamps are in
+    // seconds or milliseconds (or higher resolution) by comparing the max
+    // error timestamp against `max_t` (which is in seconds). If timestamps
+    // look like milliseconds, divide by 1000 before bucketing.
     let mut per_sec: BTreeMap<u64, usize> = BTreeMap::new();
     if let Some(es) = errors {
-        for &t in es {
-            *per_sec.entry(t).or_insert(0) += 1;
+        if !es.is_empty() {
+            let &max_err = es.iter().max().unwrap();
+            // Try divisors for: seconds(1), milliseconds(1_000), microseconds(1_000_000), nanoseconds(1_000_000_000)
+            let candidates: [u64; 4] = [1, 1_000, 1_000_000, 1_000_000_000];
+            // pick the smallest divisor that makes max_err/div <= max_t * 10
+            let mut divisor = *candidates.last().unwrap();
+            for &d in &candidates {
+                if (max_err as f64) / (d as f64) <= max_t * 10.0 {
+                    divisor = d;
+                    break;
+                }
+            }
+
+            for &t in es {
+                // floor to the second after applying divisor so multiple
+                // sub-second timestamps in the same second bucket together.
+                let sec = if divisor > 1 {
+                    ((t as f64) / (divisor as f64)).floor() as u64
+                } else {
+                    t
+                };
+                *per_sec.entry(sec).or_insert(0) += 1;
+            }
+
+            // If we ended up with an empty map (unexpected), try a couple of
+            // fallback divisors to be more forgiving with the input unit.
+            if per_sec.is_empty() {
+                for &alt in &[1000u64, 1u64, 1_000_000u64] {
+                    let mut alt_map: BTreeMap<u64, usize> = BTreeMap::new();
+                    for &t in es {
+                        let sec = if alt > 1 { ((t as f64) / (alt as f64)).floor() as u64 } else { t };
+                        *alt_map.entry(sec).or_insert(0) += 1;
+                    }
+                    if !alt_map.is_empty() {
+                        per_sec = alt_map;
+                        break;
+                    }
+                }
+            }
         }
     }
     let max_per_sec = per_sec.values().copied().max().unwrap_or(0);
+    // Debug: print buckets when running non-release builds so you can verify
+    // that multiple errors in the same second are being counted.
+    // debug printing removed
 
     // Map error counts into a small band at the bottom of the chart (≈ 18% of Y range).
     let mut err_pts: Vec<(f64, f64)> = Vec::new();
@@ -64,9 +107,11 @@ pub fn draw_wpm_chart<B: Backend>(
         datasets.push(
             Dataset::default()
                 .name("Errors")
-                .marker(symbols::Marker::Dot)   // small, crisp red points
+                // use a solid block marker so it won't visually disappear when
+                // overlapping braille/line markers; keep only fg + bold (no bg)
+                .marker(symbols::Marker::Block)
                 .graph_type(GraphType::Scatter) // points, not a connected line
-                .style(Style::default().fg(theme.error.to_tui_color()))
+                .style(Style::default().fg(theme.error.to_tui_color()).add_modifier(Modifier::BOLD))
                 .data(&err_pts),
         );
     }
@@ -127,6 +172,25 @@ pub fn draw_wpm_chart<B: Backend>(
         let gutter = 6u16;
         let chart_area = Rect::new(area.x, area.y, area.width.saturating_sub(gutter), area.height);
         f.render_widget(chart, chart_area);
+
+        // draw a small manual legend in the top-right of the chart area so
+        // the "Errors" label is always visible with the correct color.
+        let legend_w = 12u16.min(chart_area.width.saturating_sub(2));
+        if legend_w >= 8 && chart_area.height > 3 {
+            let legend = Rect::new(
+                chart_area.x + chart_area.width.saturating_sub(legend_w) - 1,
+                chart_area.y + 1,
+                legend_w,
+                3,
+            );
+            use tui::text::Spans as TSpans;
+            use tui::widgets::Paragraph as TParagraph;
+            let mut lines = Vec::new();
+            lines.push(TSpans::from(Span::styled("WPM", Style::default().fg(theme.chart_line.to_tui_color()))));
+            lines.push(TSpans::from(Span::styled("Errors", Style::default().fg(theme.error.to_tui_color()).add_modifier(Modifier::BOLD))));
+            let p = TParagraph::new(lines).style(Style::default().bg(theme.background.to_tui_color()));
+            f.render_widget(p, legend);
+        }
 
         // Right gutter area
         let right = Rect::new(chart_area.x + chart_area.width, chart_area.y, gutter, chart_area.height);
