@@ -102,19 +102,10 @@ pub fn draw_wpm_chart<B: Backend>(
         }
     }
 
-    let mut datasets = vec![wpm_ds];
-    if !err_pts.is_empty() {
-        datasets.push(
-            Dataset::default()
-                .name("Errors")
-                // use a solid block marker so it won't visually disappear when
-                // overlapping braille/line markers; keep only fg + bold (no bg)
-                .marker(symbols::Marker::Block)
-                .graph_type(GraphType::Scatter) // points, not a connected line
-                .style(Style::default().fg(theme.error.to_tui_color()).add_modifier(Modifier::BOLD))
-                .data(&err_pts),
-        );
-    }
+    // Keep only the WPM dataset for the chart. We'll draw error markers as
+    // explicit red 'X' glyphs overlaid on top of the chart so they are always
+    // visible and look like Monkeytype's X markers.
+    let datasets = vec![wpm_ds];
 
     // ---- Axis label helpers ----
     fn fmt_time_label(secs: f64) -> String {
@@ -173,48 +164,118 @@ pub fn draw_wpm_chart<B: Backend>(
         let chart_area = Rect::new(area.x, area.y, area.width.saturating_sub(gutter), area.height);
         f.render_widget(chart, chart_area);
 
+        // Overlay red 'X' markers for each error point by mapping chart
+        // coordinates -> terminal cells and rendering a 1x1 Paragraph with
+        // a heavy multiplication glyph. This gives us a consistent red X
+        // regardless of the Chart's built-in marker set.
+        if !err_pts.is_empty() {
+            use tui::widgets::Paragraph;
+
+            let x_min = 0.0f64;
+            let x_max = max_t.max(1.0);
+            let y_min = 0.0f64;
+            let y_max = max_w.max(1.0);
+
+            // Use the chart's inner plotting area (shrink by 1 on all sides to
+            // avoid the Block border and title row). This prevents markers from
+            // being drawn on the widget frame.
+            let plot_x = chart_area.x.saturating_add(1);
+            let plot_y = chart_area.y.saturating_add(1);
+            let plot_w = chart_area.width.saturating_sub(2);
+            let plot_h = chart_area.height.saturating_sub(2);
+
+            let cw = plot_w.saturating_sub(1) as f64;
+            let ch = plot_h.saturating_sub(1) as f64;
+
+            for &(x, y) in &err_pts {
+                // normalized ratios (clamp to [0,1])
+                let xr = if x_max > x_min { ((x - x_min) / (x_max - x_min)).clamp(0.0, 1.0) } else { 0.0 };
+                let yr = if y_max > y_min { ((y - y_min) / (y_max - y_min)).clamp(0.0, 1.0) } else { 0.0 };
+
+                // terminal coordinates inside plotting area. x grows right, y grows down.
+                let px = plot_x.saturating_add((xr * cw).round() as u16);
+                // invert y because chart origin is bottom-left for plotting
+                let py = plot_y.saturating_add(plot_h.saturating_sub(1))
+                    .saturating_sub((yr * ch).round() as u16);
+
+                // ensure inside area
+                if px >= chart_area.x && px < chart_area.x + chart_area.width
+                    && py >= chart_area.y && py < chart_area.y + chart_area.height
+                {
+                    let x_span = Span::styled("✕", Style::default().fg(theme.error.to_tui_color()).add_modifier(Modifier::BOLD));
+                    let p = Paragraph::new(x_span).style(Style::default().bg(theme.background.to_tui_color()));
+                    // render a 1x1 cell paragraph at the computed position
+                    f.render_widget(p, Rect::new(px, py, 1, 1));
+                }
+            }
+        }
+
         // (manual legend removed — the UI already shows a Summary box with labels)
 
         // Right gutter area
         let right = Rect::new(chart_area.x + chart_area.width, chart_area.y, gutter, chart_area.height);
 
-        // --- Place labels inside the same vertical band as the dots ---
-        // Anchor the label band to the bottom of the gutter so it lines up with the
-        // error points. Use the same `err_band_ratio` as used to map error points.
-        let band_ratio = err_band_ratio; // must match the ratio used to build the dots
-        let h = right.height;
+        // --- Place labels so they align exactly with the plotted X markers ---
+        // We'll compute the screen row for y = max, y = half, and y = 0 using
+        // the same plotting -> screen transform as the X markers so both line
+        // up precisely.
+        let h = right.height as i32;
         if h >= 3 {
-            let mut band_rows = ((h as f64) * band_ratio).round() as u16;
-            band_rows = band_rows.clamp(3, h);
-
-            let band_start = h.saturating_sub(band_rows); // first row of band (0 is top)
-            let band_mid = band_start + (band_rows / 2);
-            let band_end = h.saturating_sub(1);
-
             use tui::widgets::Paragraph;
             use tui::text::Spans;
 
+            // Inner plotting rect (must match the one used for plotting Xs).
+            let plot_y = chart_area.y.saturating_add(1);
+            let plot_h = chart_area.height.saturating_sub(2);
+            let ch = (plot_h.saturating_sub(1)) as f64;
+
+            // Compute band top value and per-step height exactly like when
+            // creating err_pts so positions are consistent.
+            let band_top = max_w * err_band_ratio;
+            let step = if max_per_sec > 0 { band_top / (max_per_sec.max(1) as f64) } else { 0.0 };
+
+            // Values to map to rows
+            let v_max = step * (max_per_sec as f64);
+            let half_count = ((max_per_sec as f64) / 2.0).round() as usize;
+            let v_half = step * (half_count as f64);
+            let v_zero = 0.0f64;
+
+            let y_min = 0.0f64;
+            let y_max = max_w.max(1.0f64);
+
+            let map_to_row = |val: f64| -> usize {
+                let yr = if y_max > y_min { ((val - y_min) / (y_max - y_min)).clamp(0.0, 1.0) } else { 0.0 };
+                let py = plot_y.saturating_add(plot_h.saturating_sub(1))
+                    .saturating_sub((yr * ch).round() as u16);
+                // convert into index relative to right area (right.y == chart_area.y)
+                let idx = py.saturating_sub(right.y) as i32;
+                idx.clamp(0, h - 1) as usize
+            };
+
+            let top_idx = map_to_row(v_max);
+            let mid_idx = map_to_row(v_half);
+            let bot_idx = map_to_row(v_zero);
+
             let mut lines: Vec<Spans> = vec![Spans::from(Span::raw("")); h as usize];
 
-            // Top of band => max errors/sec
-            lines[band_start as usize] = Spans::from(
+            // avoid accidental collisions: ensure distinct indices if possible
+            let mid_idx = if mid_idx == top_idx && bot_idx != top_idx {
+                (top_idx + bot_idx) / 2
+            } else { mid_idx };
+
+            lines[top_idx] = Spans::from(
                 Span::styled(
                     format!("{}", max_per_sec),
                     Style::default().fg(theme.error.to_tui_color()).add_modifier(Modifier::BOLD),
                 )
             );
-
-            // Middle of band => half
-            let half = ((max_per_sec as f64) / 2.0).round() as usize;
-            lines[band_mid as usize] = Spans::from(
+            lines[mid_idx] = Spans::from(
                 Span::styled(
-                    format!("{}", half),
+                    format!("{}", half_count),
                     Style::default().fg(theme.error.to_tui_color()),
                 )
             );
-
-            // Bottom of band => 0
-            lines[band_end as usize] = Spans::from(
+            lines[bot_idx] = Spans::from(
                 Span::styled(
                     "0",
                     Style::default().fg(theme.error.to_tui_color()).add_modifier(Modifier::BOLD),

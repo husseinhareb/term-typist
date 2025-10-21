@@ -30,9 +30,11 @@ fn read_words() -> io::Result<Vec<String>> {
 pub fn generate_random_sentence(num_words: usize) -> String {
     let words = match read_words() {
         Ok(words) => words,
-        Err(_err) => {
-            // Could not read bundled words; return empty string. Keep silent in
-            // non-debug builds to avoid noisy stderr output.
+        Err(err) => {
+            eprintln!(
+                "Error reading words: {}. Expected: $XDG_DATA_HOME/term-typist/words/words.txt",
+                err
+            );
             return String::new();
         }
     };
