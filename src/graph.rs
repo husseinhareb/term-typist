@@ -173,24 +173,7 @@ pub fn draw_wpm_chart<B: Backend>(
         let chart_area = Rect::new(area.x, area.y, area.width.saturating_sub(gutter), area.height);
         f.render_widget(chart, chart_area);
 
-        // draw a small manual legend in the top-right of the chart area so
-        // the "Errors" label is always visible with the correct color.
-        let legend_w = 12u16.min(chart_area.width.saturating_sub(2));
-        if legend_w >= 8 && chart_area.height > 3 {
-            let legend = Rect::new(
-                chart_area.x + chart_area.width.saturating_sub(legend_w) - 1,
-                chart_area.y + 1,
-                legend_w,
-                3,
-            );
-            use tui::text::Spans as TSpans;
-            use tui::widgets::Paragraph as TParagraph;
-            let mut lines = Vec::new();
-            lines.push(TSpans::from(Span::styled("WPM", Style::default().fg(theme.chart_line.to_tui_color()))));
-            lines.push(TSpans::from(Span::styled("Errors", Style::default().fg(theme.error.to_tui_color()).add_modifier(Modifier::BOLD))));
-            let p = TParagraph::new(lines).style(Style::default().bg(theme.background.to_tui_color()));
-            f.render_widget(p, legend);
-        }
+        // (manual legend removed — the UI already shows a Summary box with labels)
 
         // Right gutter area
         let right = Rect::new(chart_area.x + chart_area.width, chart_area.y, gutter, chart_area.height);
