@@ -11,6 +11,7 @@ use tui::{
 };
 use std::collections::BTreeMap;
 use tui::layout::Alignment;
+use tui::widgets::Wrap;
 use crate::theme::Theme;
 
 /// Draw WPM chart with optional error markers.
@@ -22,7 +23,15 @@ pub fn draw_wpm_chart<B: Backend>(
     data: &[(u64, f64)],
     theme: &Theme,
     errors: Option<&[u64]>,
+    words: Option<&str>,
 ) {
+    // Split the provided area into top (chart) and bottom (words) sections.
+    // Bottom section takes ~20% of the total height and the same width.
+    let split_h = ((area.height as f64) * 0.80).round() as u16;
+    let split_h = split_h.clamp(3, area.height.saturating_sub(1));
+    let top_rect = Rect::new(area.x, area.y, area.width, split_h);
+    let bottom_rect = Rect::new(area.x, area.y.saturating_add(split_h), area.width, area.height.saturating_sub(split_h));
+
     // ---- WPM data ----
     let pts: Vec<(f64, f64)> = data.iter().map(|&(t, w)| (t as f64, w)).collect();
     let max_t = data.last().map(|&(t, _)| t as f64).unwrap_or(1.0).max(1.0);
@@ -159,16 +168,16 @@ pub fn draw_wpm_chart<B: Backend>(
         );
 
     // Reserve a slim right gutter for an error count scale that aligns with the error band.
-    if max_per_sec > 0 && area.width > 16 {
+    if max_per_sec > 0 && top_rect.width > 16 {
         let gutter = 6u16;
-        let chart_area = Rect::new(area.x, area.y, area.width.saturating_sub(gutter), area.height);
+        let chart_area = Rect::new(top_rect.x, top_rect.y, top_rect.width.saturating_sub(gutter), top_rect.height);
         f.render_widget(chart, chart_area);
 
         // Overlay red 'X' markers for each error point by mapping chart
         // coordinates -> terminal cells and rendering a 1x1 Paragraph with
         // a heavy multiplication glyph. This gives us a consistent red X
         // regardless of the Chart's built-in marker set.
-        if !err_pts.is_empty() {
+    if !err_pts.is_empty() {
             use tui::widgets::Paragraph;
 
             let x_min = 0.0f64;
@@ -213,7 +222,7 @@ pub fn draw_wpm_chart<B: Backend>(
         // (manual legend removed — the UI already shows a Summary box with labels)
 
         // Right gutter area
-        let right = Rect::new(chart_area.x + chart_area.width, chart_area.y, gutter, chart_area.height);
+    let right = Rect::new(chart_area.x + chart_area.width, chart_area.y, gutter, chart_area.height);
 
         // --- Place labels so they align exactly with the plotted X markers ---
         // We'll compute the screen row for y = max, y = half, and y = 0 using
@@ -288,7 +297,22 @@ pub fn draw_wpm_chart<B: Backend>(
             f.render_widget(para, right);
         }
     } else {
-        // Fallback: render chart full width
-        f.render_widget(chart, area);
+        // Fallback: render chart in the top rect
+        f.render_widget(chart, top_rect);
+    }
+
+    // Bottom panel: show the test words (if provided)
+    if let Some(text) = words {
+        use tui::widgets::Paragraph;
+        let para = Paragraph::new(text)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(theme.border.to_tui_color()))
+                    .style(Style::default().bg(theme.background.to_tui_color()).fg(theme.foreground.to_tui_color()))
+                    .title("Text"),
+            )
+            .wrap(Wrap { trim: true });
+        f.render_widget(para, bottom_rect);
     }
 }

@@ -514,7 +514,14 @@ pub fn draw_finished<B: Backend>(f: &mut Frame<B>, app: &App) {
             error_times.push(t);
         }
     }
-    graph::draw_wpm_chart(f, chunks[0], &app.samples, &app.theme, if error_times.is_empty() { None } else { Some(&error_times) });
+    graph::draw_wpm_chart(
+        f,
+        chunks[0],
+        &app.samples,
+        &app.theme,
+        if error_times.is_empty() { None } else { Some(&error_times) },
+        Some(&app.target),
+    );
 
     // Right: stats
     // Align net and raw WPM to the same time window (test start -> end) so raw >= net.
