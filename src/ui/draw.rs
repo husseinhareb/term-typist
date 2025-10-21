@@ -521,6 +521,7 @@ pub fn draw_finished<B: Backend>(f: &mut Frame<B>, app: &App) {
         &app.theme,
         if error_times.is_empty() { None } else { Some(&error_times) },
         Some(&app.target),
+        Some(&app.status),
     );
 
     // Right: stats

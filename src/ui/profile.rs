@@ -486,7 +486,45 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection, theme: &The
     }
 
     // Profile chart aggregates do not include per-test error timestamps, so pass None
-    graph::draw_wpm_chart(f, bottom[0], &data, theme, None, None);
+    // Attempt to load the selected test's target text and statuses so the
+    // bottom panel can color the characters like the original test. If we
+    // can't find the selected test or it has no statuses, fall back to None.
+    let mut sel_text: Option<String> = None;
+    let mut sel_statuses: Option<Vec<crate::app::state::Status>> = None;
+    if total_tests > 0 {
+        // Query the test at absolute index `cursor` (ordered newest first)
+        let q = conn.prepare_cached("SELECT id, target_text, target_statuses FROM tests ORDER BY started_at DESC LIMIT 1 OFFSET ?").ok();
+        if let Some(mut q) = q {
+            if let Ok(mut rows) = q.query([cursor as i64]) {
+                if let Ok(Some(r)) = rows.next() {
+                    let text: String = r.get(1).unwrap_or_default();
+                    sel_text = Some(text);
+                    let statuses_raw: Option<String> = r.get(2).ok();
+                    if let Some(sraw) = statuses_raw {
+                        let mut v: Vec<crate::app::state::Status> = Vec::new();
+                        for ch in sraw.chars() {
+                            match ch {
+                                'C' => v.push(crate::app::state::Status::Correct),
+                                'I' => v.push(crate::app::state::Status::Incorrect),
+                                _ => v.push(crate::app::state::Status::Untyped),
+                            }
+                        }
+                        sel_statuses = Some(v);
+                    }
+                }
+            }
+        }
+    }
+
+    graph::draw_wpm_chart(
+        f,
+        bottom[0],
+        &data,
+        theme,
+        None,
+        sel_text.as_deref(),
+        sel_statuses.as_deref(),
+    );
 
     // Scrollable Recent Tests table
         let sql = format!(

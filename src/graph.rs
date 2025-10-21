@@ -10,6 +10,8 @@ use tui::{
     Frame,
 };
 use std::collections::BTreeMap;
+use tui::text::Spans;
+use crate::app::state::Status;
 use tui::layout::Alignment;
 use tui::widgets::Wrap;
 use crate::theme::Theme;
@@ -24,6 +26,7 @@ pub fn draw_wpm_chart<B: Backend>(
     theme: &Theme,
     errors: Option<&[u64]>,
     words: Option<&str>,
+    statuses: Option<&[Status]>,
 ) {
     // Split the provided area into top (chart) and bottom (words) sections.
     // Bottom section takes ~20% of the total height and the same width.
@@ -304,7 +307,28 @@ pub fn draw_wpm_chart<B: Backend>(
     // Bottom panel: show the test words (if provided)
     if let Some(text) = words {
         use tui::widgets::Paragraph;
-        let para = Paragraph::new(text)
+        // Build styled spans per character driven by `statuses` if available
+        let mut line_spans: Vec<Span> = Vec::new();
+        let mut si = 0usize;
+        for ch in text.chars() {
+            let style = if let Some(sts) = statuses {
+                if si < sts.len() {
+                    match sts[si] {
+                        Status::Correct => Style::default().fg(theme.text_correct.to_tui_color()),
+                        Status::Incorrect => Style::default().fg(theme.text_incorrect.to_tui_color()),
+                        Status::Untyped => Style::default().fg(theme.text_untyped.to_tui_color()),
+                    }
+                } else {
+                    Style::default().fg(theme.text_untyped.to_tui_color())
+                }
+            } else {
+                Style::default().fg(theme.text_untyped.to_tui_color())
+            };
+            line_spans.push(Span::styled(ch.to_string(), style));
+            si = si.saturating_add(1);
+        }
+
+        let para = Paragraph::new(vec![Spans::from(line_spans)])
             .block(
                 Block::default()
                     .borders(Borders::ALL)

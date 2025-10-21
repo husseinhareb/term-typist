@@ -36,6 +36,9 @@ pub enum KeyboardLayout {
 pub struct App {
     pub target: String,
     pub status: Vec<Status>,
+    /// Whether a given character was ever typed incorrectly and later corrected.
+    /// Indexed by character position in `target`.
+    pub corrected: Vec<bool>,
     pub start: Option<Instant>,
     pub last_input: Instant,
     pub correct_chars: usize,
@@ -105,6 +108,7 @@ impl App {
         App {
             target: target.clone(),
             status: vec![Status::Untyped; target.chars().count()],
+            corrected: vec![false; target.chars().count()],
             start: None,
             last_input: now,
             correct_chars: 0,
@@ -169,6 +173,11 @@ impl App {
             } else {
                 self.status[i] = Status::Incorrect;
                 self.incorrect_chars += 1;
+                // mark this character position as having been incorrect at
+                // least once so later corrections can be highlighted.
+                if i < self.corrected.len() {
+                    self.corrected[i] = true;
+                }
             }
         }
         // Re-lock if idle > 1s

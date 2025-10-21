@@ -72,7 +72,8 @@ impl Default for Theme {
             
             // Text area
             text_untyped: ThemeColor::Named("white".to_string()),
-            text_correct: ThemeColor::Named("green".to_string()),
+            // Use an orange RGB for corrected letters to improve visibility
+            text_correct: ThemeColor::Rgb([255, 165, 0]),
             text_incorrect: ThemeColor::Named("red".to_string()),
             text_cursor_bg: ThemeColor::Named("yellow".to_string()),
             text_cursor_fg: ThemeColor::Named("black".to_string()),

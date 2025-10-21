@@ -45,6 +45,10 @@ pub fn open() -> Result<Connection> {
         );
     "#,
     )?;
+    // Backwards-compatible schema migration: add target_statuses column if it doesn't exist.
+    // ALTER TABLE ADD COLUMN is safe if the column already exists on newer DBs (it errors),
+    // so ignore errors here.
+    let _ = conn.execute_batch("ALTER TABLE tests ADD COLUMN target_statuses TEXT;");
     Ok(conn)
 }
 
@@ -80,11 +84,22 @@ pub fn save_test(conn: &mut Connection, app: &App) -> Result<()> {
     };
 
     let tx = conn.transaction()?;
+    // Serialize per-character statuses so we can render historical tests with
+    // exact per-char coloring. Use 'C' = correct, 'I' = incorrect, 'U' = untyped.
+    let mut statuses_serial = String::with_capacity(app.status.len());
+    for s in &app.status {
+        statuses_serial.push(match s {
+            crate::app::state::Status::Correct => 'C',
+            crate::app::state::Status::Incorrect => 'I',
+            crate::app::state::Status::Untyped => 'U',
+        });
+    }
+
     tx.execute(
         "INSERT INTO tests
            (started_at,duration_ms,mode,target_text,target_value,
-            correct_chars,incorrect_chars,wpm,accuracy)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)",
+            correct_chars,incorrect_chars,wpm,accuracy,target_statuses)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
         params![
             &started_at,
             &duration_ms,
@@ -94,7 +109,8 @@ pub fn save_test(conn: &mut Connection, app: &App) -> Result<()> {
             &(app.correct_chars as i64),
             &(app.incorrect_chars as i64),
             &wpm,
-            &acc
+            &acc,
+            &statuses_serial
         ],
     )?;
     let test_id = tx.last_insert_rowid();
