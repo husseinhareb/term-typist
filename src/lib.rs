@@ -335,15 +335,25 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                         _ => None,
                     };
 
-                    // 1) digit wins (map '1'..'9','0' -> indices 0..9)
+                    // Terminals often don't report SHIFT in `modifiers` for printable
+                    // characters; instead they deliver the resultant character (e.g. '!').
+                    // To reliably detect Shift+number toggles while still preventing plain
+                    // number presses from toggling across layouts, we accept a mapping
+                    // when either:
+                    //  - the produced char is a shifted symbol (e.g. '!','@','#'...) or
+                    //  - the terminal reported a digit AND the SHIFT modifier is present.
+                    // This avoids reacting to plain number presses (which can vary by layout)
+                    // while still working on terminals that don't include SHIFT in modifiers.
                     let idx_opt: Option<usize> = if c.is_ascii_digit() {
-                        Some(if c == '0' { 9 } else { (c as u8 - b'1') as usize })
-                    } else if modifiers.contains(KeyModifiers::SHIFT) {
-                        // prefer shifted symbols mapping when shift reported
-                        shifted_map(c).or_else(|| azerty_map(c))
+                        // Only accept digit->index when SHIFT modifier is present (user pressed Shift+digit)
+                        if modifiers.contains(KeyModifiers::SHIFT) {
+                            Some(if c == '0' { 9 } else { (c as u8 - b'1') as usize })
+                        } else {
+                            None
+                        }
                     } else {
-                        // prefer azerty/unshifted mapping, fallback to shifted_map
-                        azerty_map(c).or_else(|| shifted_map(c))
+                        // For non-digit produced chars (likely shifted symbols), try both maps.
+                        shifted_map(c).or_else(|| azerty_map(c))
                     };
 
                     if let Some(idx) = idx_opt {
