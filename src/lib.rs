@@ -673,7 +673,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                                 if let Ok(temp_app) = (|| -> Result<app::state::App, Box<dyn std::error::Error>> {
                                     // Fetch the full test row
                                     let mut stmt = conn.prepare(
-                                        "SELECT started_at, duration_ms, mode, target_text, target_value, correct_chars, incorrect_chars FROM tests WHERE id = ?",
+                                        "SELECT started_at, duration_ms, mode, target_text, target_value, correct_chars, incorrect_chars, target_statuses, target_corrected FROM tests WHERE id = ?",
                                     )?;
                                     let row = stmt.query_row([opt_id], |r| {
                                         Ok((
@@ -684,10 +684,12 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                                             r.get::<_, i64>(4)?,
                                             r.get::<_, i64>(5)?,
                                             r.get::<_, i64>(6)?,
+                                            r.get::<_, Option<String>>(7)?,
+                                            r.get::<_, Option<String>>(8)?,
                                         ))
                                     })?;
 
-                                    let (_started_at_str, duration_ms, mode_s, target_text, target_value, correct_chars, incorrect_chars) = row;
+                                    let (_started_at_str, duration_ms, mode_s, target_text, target_value, correct_chars, incorrect_chars, statuses_opt, corrected_opt) = row;
 
                                     // Load samples for this test
                                     let mut samp_stmt = conn.prepare("SELECT elapsed_s, wpm FROM samples WHERE test_id = ? ORDER BY elapsed_s ASC")?;
@@ -718,6 +720,29 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                                     // Populate counts
                                     a.correct_chars = correct_chars as usize;
                                     a.incorrect_chars = incorrect_chars as usize;
+
+                                    // If per-character statuses were saved, restore them so the finished
+                                    // view can render the colored text. Otherwise leave as Untyped.
+                                    if let Some(sraw) = statuses_opt {
+                                        let mut v = Vec::new();
+                                        for ch in sraw.chars() {
+                                            match ch {
+                                                'C' => v.push(app::state::Status::Correct),
+                                                'I' => v.push(app::state::Status::Incorrect),
+                                                _ => v.push(app::state::Status::Untyped),
+                                            }
+                                        }
+                                        a.status = v;
+                                    }
+
+                                    // If corrected flags were saved, restore them too.
+                                    if let Some(craw) = corrected_opt {
+                                        let mut cv = Vec::new();
+                                        for ch in craw.chars() {
+                                            cv.push(ch == '1');
+                                        }
+                                        a.corrected = cv;
+                                    }
 
                                     // Reconstruct start Instant so elapsed matches duration_ms
                                     use std::time::{Duration, Instant};
@@ -773,7 +798,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                                 // Build temp app from DB and render finished summary (reuse same logic as Profile case)
                                 if let Ok(temp_app) = (|| -> Result<app::state::App, Box<dyn std::error::Error>> {
                                     let mut stmt = conn.prepare(
-                                        "SELECT started_at, duration_ms, mode, target_text, target_value, correct_chars, incorrect_chars FROM tests WHERE id = ?",
+                                        "SELECT started_at, duration_ms, mode, target_text, target_value, correct_chars, incorrect_chars, target_statuses, target_corrected FROM tests WHERE id = ?",
                                     )?;
                                     let row = stmt.query_row([opt_id], |r| {
                                         Ok((
@@ -784,10 +809,12 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                                             r.get::<_, i64>(4)?,
                                             r.get::<_, i64>(5)?,
                                             r.get::<_, i64>(6)?,
+                                            r.get::<_, Option<String>>(7)?,
+                                            r.get::<_, Option<String>>(8)?,
                                         ))
                                     })?;
 
-                                    let (_started_at_str, duration_ms, mode_s, target_text, target_value, correct_chars, incorrect_chars) = row;
+                                    let (_started_at_str, duration_ms, mode_s, target_text, target_value, correct_chars, incorrect_chars, statuses_opt, corrected_opt) = row;
                                     let mut samp_stmt = conn.prepare("SELECT elapsed_s, wpm FROM samples WHERE test_id = ? ORDER BY elapsed_s ASC")?;
                                     let samples: Vec<(u64, f64)> = samp_stmt
                                         .query_map([opt_id], |r| Ok((r.get::<_, i64>(0)? as u64, r.get::<_, f64>(1)?)))?
@@ -808,6 +835,24 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                                     a.theme = app.theme.clone();
                                     a.correct_chars = correct_chars as usize;
                                     a.incorrect_chars = incorrect_chars as usize;
+                                    if let Some(sraw) = statuses_opt {
+                                        let mut v = Vec::new();
+                                        for ch in sraw.chars() {
+                                            match ch {
+                                                'C' => v.push(app::state::Status::Correct),
+                                                'I' => v.push(app::state::Status::Incorrect),
+                                                _ => v.push(app::state::Status::Untyped),
+                                            }
+                                        }
+                                        a.status = v;
+                                    }
+                                    if let Some(craw) = corrected_opt {
+                                        let mut cv = Vec::new();
+                                        for ch in craw.chars() {
+                                            cv.push(ch == '1');
+                                        }
+                                        a.corrected = cv;
+                                    }
                                     use std::time::{Duration, Instant};
                                     let dur = Duration::from_millis(duration_ms as u64);
                                     a.start = Some(Instant::now() - dur);

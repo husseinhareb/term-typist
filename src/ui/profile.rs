@@ -493,7 +493,7 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection, theme: &The
     let mut sel_statuses: Option<Vec<crate::app::state::Status>> = None;
     if total_tests > 0 {
         // Query the test at absolute index `cursor` (ordered newest first)
-        let q = conn.prepare_cached("SELECT id, target_text, target_statuses FROM tests ORDER BY started_at DESC LIMIT 1 OFFSET ?").ok();
+        let q = conn.prepare_cached("SELECT id, target_text, target_statuses, target_corrected FROM tests ORDER BY started_at DESC LIMIT 1 OFFSET ?").ok();
         if let Some(mut q) = q {
             if let Ok(mut rows) = q.query([cursor as i64]) {
                 if let Ok(Some(r)) = rows.next() {
@@ -516,6 +516,28 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection, theme: &The
         }
     }
 
+    // Attempt to load corrected flags separately so we can pass them into the chart.
+    // Re-query the selected test for corrected flags if we didn't parse them above.
+    let mut sel_corrected: Option<Vec<bool>> = None;
+    if total_tests > 0 {
+        let q2 = conn.prepare_cached("SELECT target_corrected FROM tests ORDER BY started_at DESC LIMIT 1 OFFSET ?").ok();
+        if let Some(mut q2) = q2 {
+            if let Ok(mut rows) = q2.query([cursor as i64]) {
+                if let Ok(Some(r2)) = rows.next() {
+                    if let Ok(opt_c) = r2.get::<_, Option<String>>(0) {
+                        if let Some(cstr) = opt_c {
+                            let mut cv: Vec<bool> = Vec::new();
+                            for ch in cstr.chars() {
+                                cv.push(ch == '1');
+                            }
+                            sel_corrected = Some(cv);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     graph::draw_wpm_chart(
         f,
         bottom[0],
@@ -524,6 +546,7 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection, theme: &The
         None,
         sel_text.as_deref(),
         sel_statuses.as_deref(),
+        sel_corrected.as_deref(),
     );
 
     // Scrollable Recent Tests table

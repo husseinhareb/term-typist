@@ -49,6 +49,8 @@ pub fn open() -> Result<Connection> {
     // ALTER TABLE ADD COLUMN is safe if the column already exists on newer DBs (it errors),
     // so ignore errors here.
     let _ = conn.execute_batch("ALTER TABLE tests ADD COLUMN target_statuses TEXT;");
+    // Also add a column to persist corrected flags (chars that were wrong then fixed)
+    let _ = conn.execute_batch("ALTER TABLE tests ADD COLUMN target_corrected TEXT;");
     Ok(conn)
 }
 
@@ -95,11 +97,18 @@ pub fn save_test(conn: &mut Connection, app: &App) -> Result<()> {
         });
     }
 
+    // Serialize corrected flags (true if the char was mistyped at least once)
+    // Use '1' for corrected, '0' for not corrected. Keep same length as target.
+    let mut corrected_serial = String::with_capacity(app.corrected.len());
+    for &b in &app.corrected {
+        corrected_serial.push(if b { '1' } else { '0' });
+    }
+
     tx.execute(
         "INSERT INTO tests
            (started_at,duration_ms,mode,target_text,target_value,
-            correct_chars,incorrect_chars,wpm,accuracy,target_statuses)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
+            correct_chars,incorrect_chars,wpm,accuracy,target_statuses,target_corrected)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)",
         params![
             &started_at,
             &duration_ms,
@@ -110,7 +119,8 @@ pub fn save_test(conn: &mut Connection, app: &App) -> Result<()> {
             &(app.incorrect_chars as i64),
             &wpm,
             &acc,
-            &statuses_serial
+            &statuses_serial,
+            &corrected_serial
         ],
     )?;
     let test_id = tx.last_insert_rowid();

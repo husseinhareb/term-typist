@@ -11,7 +11,8 @@ pub fn catppuccin_mocha() -> Theme {
         title_accent: ThemeColor::Rgb([139, 233, 253]), // teal
 
         text_untyped: ThemeColor::Rgb([205, 214, 244]),
-        text_correct: ThemeColor::Rgb([165, 220, 134]),
+    text_correct: ThemeColor::Rgb([165, 220, 134]),
+    text_corrected: ThemeColor::Rgb([255, 165, 0]),
         text_incorrect: ThemeColor::Rgb([255, 111, 105]),
         text_cursor_bg: ThemeColor::Rgb([250, 218, 88]),
         text_cursor_fg: ThemeColor::Rgb([20, 20, 24]),
@@ -48,7 +49,8 @@ pub fn gruvbox_dark() -> Theme {
         title_accent: ThemeColor::Rgb([162, 190, 140]), // green
 
         text_untyped: ThemeColor::Rgb([235, 219, 178]),
-        text_correct: ThemeColor::Rgb([166, 226, 46]),
+    text_correct: ThemeColor::Rgb([166, 226, 46]),
+    text_corrected: ThemeColor::Rgb([255, 165, 0]),
         text_incorrect: ThemeColor::Rgb([251, 73, 52]),
         text_cursor_bg: ThemeColor::Rgb([250, 189, 47]),
         text_cursor_fg: ThemeColor::Rgb([40, 40, 35]),
@@ -86,7 +88,8 @@ pub fn dracula() -> Theme {
         title_accent: ThemeColor::Rgb([139, 233, 253]),
 
         text_untyped: ThemeColor::Rgb([248, 248, 242]),
-        text_correct: ThemeColor::Rgb([80, 250, 123]),
+    text_correct: ThemeColor::Rgb([80, 250, 123]),
+    text_corrected: ThemeColor::Rgb([255, 165, 0]),
         text_incorrect: ThemeColor::Rgb([255, 85, 85]),
         text_cursor_bg: ThemeColor::Rgb([255, 184, 108]),
         text_cursor_fg: ThemeColor::Rgb([40, 42, 54]),
@@ -123,7 +126,8 @@ pub fn solarized_dark() -> Theme {
         title_accent: ThemeColor::Rgb([42, 161, 152]),
 
         text_untyped: ThemeColor::Rgb([131, 148, 150]),
-        text_correct: ThemeColor::Rgb([133, 153, 0]),
+    text_correct: ThemeColor::Rgb([133, 153, 0]),
+    text_corrected: ThemeColor::Rgb([255, 165, 0]),
         text_incorrect: ThemeColor::Rgb([220, 50, 47]),
         text_cursor_bg: ThemeColor::Rgb([181, 137, 0]),
         text_cursor_fg: ThemeColor::Rgb([0, 43, 54]),
@@ -160,7 +164,8 @@ pub fn solarized_light() -> Theme {
         title_accent: ThemeColor::Rgb([42, 161, 152]),
 
         text_untyped: ThemeColor::Rgb([101, 123, 131]),
-        text_correct: ThemeColor::Rgb([133, 153, 0]),
+    text_correct: ThemeColor::Rgb([133, 153, 0]),
+    text_corrected: ThemeColor::Rgb([255, 165, 0]),
         text_incorrect: ThemeColor::Rgb([220, 50, 47]),
         text_cursor_bg: ThemeColor::Rgb([181, 137, 0]),
         text_cursor_fg: ThemeColor::Rgb([253, 246, 227]),
@@ -197,7 +202,8 @@ pub fn nord() -> Theme {
         title_accent: ThemeColor::Rgb([129, 161, 193]),
 
         text_untyped: ThemeColor::Rgb([216, 222, 233]),
-        text_correct: ThemeColor::Rgb([163, 190, 140]),
+    text_correct: ThemeColor::Rgb([163, 190, 140]),
+    text_corrected: ThemeColor::Rgb([255, 165, 0]),
         text_incorrect: ThemeColor::Rgb([224, 108, 117]),
         text_cursor_bg: ThemeColor::Rgb([229, 192, 123]),
         text_cursor_fg: ThemeColor::Rgb([46, 52, 64]),
@@ -234,7 +240,8 @@ pub fn one_dark() -> Theme {
         title_accent: ThemeColor::Rgb([229, 192, 123]),
 
         text_untyped: ThemeColor::Rgb([171, 178, 191]),
-        text_correct: ThemeColor::Rgb([152, 195, 121]),
+    text_correct: ThemeColor::Rgb([152, 195, 121]),
+    text_corrected: ThemeColor::Rgb([255, 165, 0]),
         text_incorrect: ThemeColor::Rgb([224, 108, 117]),
         text_cursor_bg: ThemeColor::Rgb([229, 192, 123]),
         text_cursor_fg: ThemeColor::Rgb([40, 44, 52]),
@@ -271,7 +278,8 @@ pub fn monokai() -> Theme {
         title_accent: ThemeColor::Rgb([166, 226, 46]),
 
         text_untyped: ThemeColor::Rgb([248, 248, 242]),
-        text_correct: ThemeColor::Rgb([166, 226, 46]),
+    text_correct: ThemeColor::Rgb([166, 226, 46]),
+    text_corrected: ThemeColor::Rgb([255, 165, 0]),
         text_incorrect: ThemeColor::Rgb([249, 38, 114]),
         text_cursor_bg: ThemeColor::Rgb([253, 151, 31]),
         text_cursor_fg: ThemeColor::Rgb([39, 40, 34]),

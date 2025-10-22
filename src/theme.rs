@@ -18,6 +18,8 @@ pub struct Theme {
     // Text area colors
     pub text_untyped: ThemeColor,
     pub text_correct: ThemeColor,
+    /// Color used for characters that were typed incorrectly and later corrected
+    pub text_corrected: ThemeColor,
     pub text_incorrect: ThemeColor,
     pub text_cursor_bg: ThemeColor,
     pub text_cursor_fg: ThemeColor,
@@ -72,8 +74,10 @@ impl Default for Theme {
             
             // Text area
             text_untyped: ThemeColor::Named("white".to_string()),
-            // Use an orange RGB for corrected letters to improve visibility
-            text_correct: ThemeColor::Rgb([255, 165, 0]),
+            // Correct text: green by default
+            text_correct: ThemeColor::Named("green".to_string()),
+            // Corrected (mistyped then fixed): orange for visibility
+            text_corrected: ThemeColor::Rgb([255, 165, 0]),
             text_incorrect: ThemeColor::Named("red".to_string()),
             text_cursor_bg: ThemeColor::Named("yellow".to_string()),
             text_cursor_fg: ThemeColor::Named("black".to_string()),

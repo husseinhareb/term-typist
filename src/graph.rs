@@ -27,6 +27,7 @@ pub fn draw_wpm_chart<B: Backend>(
     errors: Option<&[u64]>,
     words: Option<&str>,
     statuses: Option<&[Status]>,
+    statuses_corrected: Option<&[bool]>,
 ) {
     // Split the provided area into top (chart) and bottom (words) sections.
     // Bottom section takes ~20% of the total height and the same width.
@@ -313,8 +314,15 @@ pub fn draw_wpm_chart<B: Backend>(
         for ch in text.chars() {
             let style = if let Some(sts) = statuses {
                 if si < sts.len() {
+                    let was_corrected = statuses_corrected.map(|v| v.get(si).copied().unwrap_or(false)).unwrap_or(false);
                     match sts[si] {
-                        Status::Correct => Style::default().fg(theme.text_correct.to_tui_color()),
+                        Status::Correct => {
+                            if was_corrected {
+                                Style::default().fg(theme.text_corrected.to_tui_color())
+                            } else {
+                                Style::default().fg(theme.text_correct.to_tui_color())
+                            }
+                        }
                         Status::Incorrect => Style::default().fg(theme.text_incorrect.to_tui_color()),
                         Status::Untyped => Style::default().fg(theme.text_untyped.to_tui_color()),
                     }

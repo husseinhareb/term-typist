@@ -354,19 +354,21 @@ pub fn draw<B: Backend>(
             let spans: Vec<Span> = app
                 .target
                 .chars()
-                .zip(app.status.iter().cloned())
                 .enumerate()
-                .map(|(i, (ch, st))| {
+                .map(|(i, ch)| {
+                    let st = app.status.get(i).copied().unwrap_or(Status::Untyped);
+                    let was_corrected = app.corrected.get(i).copied().unwrap_or(false);
                     let base_style = match st {
-                        Status::Untyped => {
-                            Style::default().fg(app.theme.text_untyped.to_tui_color())
-                        }
+                        Status::Untyped => Style::default().fg(app.theme.text_untyped.to_tui_color()),
                         Status::Correct => {
-                            Style::default().fg(app.theme.text_correct.to_tui_color())
+                            if was_corrected {
+                                // corrected (was wrong, now correct)
+                                Style::default().fg(app.theme.text_corrected.to_tui_color())
+                            } else {
+                                Style::default().fg(app.theme.text_correct.to_tui_color())
+                            }
                         }
-                        Status::Incorrect => {
-                            Style::default().fg(app.theme.text_incorrect.to_tui_color())
-                        }
+                        Status::Incorrect => Style::default().fg(app.theme.text_incorrect.to_tui_color()),
                     };
                     if i == cur && app.mode == Mode::Insert {
                         Span::styled(
@@ -522,6 +524,7 @@ pub fn draw_finished<B: Backend>(f: &mut Frame<B>, app: &App) {
         if error_times.is_empty() { None } else { Some(&error_times) },
         Some(&app.target),
         Some(&app.status),
+        Some(&app.corrected),
     );
 
     // Right: stats
