@@ -249,7 +249,7 @@ pub fn draw_wpm_chart<B: Backend>(
 
             // Values to map to rows
             let v_max = step * (max_per_sec as f64);
-            let half_count = ((max_per_sec as f64) / 2.0).round() as usize;
+            let half_count = max_per_sec / 2;
             let v_half = step * (half_count as f64);
             let v_zero = 0.0f64;
 
@@ -282,12 +282,15 @@ pub fn draw_wpm_chart<B: Backend>(
                     Style::default().fg(theme.error.to_tui_color()).add_modifier(Modifier::BOLD),
                 )
             );
-            lines[mid_idx] = Spans::from(
-                Span::styled(
-                    format!("{}", half_count),
-                    Style::default().fg(theme.error.to_tui_color()),
-                )
-            );
+            // Only show the middle label when it represents a distinct non-zero value
+            if half_count != 0 && half_count != max_per_sec {
+                lines[mid_idx] = Spans::from(
+                    Span::styled(
+                        format!("{}", half_count),
+                        Style::default().fg(theme.error.to_tui_color()),
+                    )
+                );
+            }
             lines[bot_idx] = Spans::from(
                 Span::styled(
                     "0",
