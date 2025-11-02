@@ -307,6 +307,44 @@ pub fn monokai() -> Theme {
     }
 }
 
+pub fn terminal() -> Theme {
+    Theme {
+        background: ThemeColor::Named("black".into()),
+        foreground: ThemeColor::Named("white".into()),
+        border: ThemeColor::Named("white".into()),
+        title: ThemeColor::Named("white".into()),
+        title_accent: ThemeColor::Named("white".into()),
+
+        text_untyped: ThemeColor::Named("dark_gray".into()),
+    text_correct: ThemeColor::Named("white".into()),
+    text_corrected: ThemeColor::Named("light_yellow".into()),
+        text_incorrect: ThemeColor::Named("white".into()),
+        text_cursor_bg: ThemeColor::Named("white".into()),
+        text_cursor_fg: ThemeColor::Named("black".into()),
+
+        tab_active: ThemeColor::Named("white".into()),
+        tab_inactive: ThemeColor::Named("dark_gray".into()),
+        highlight: ThemeColor::Named("white".into()),
+        stats_label: ThemeColor::Named("gray".into()),
+        stats_value: ThemeColor::Named("white".into()),
+
+        key_normal_bg: ThemeColor::Named("black".into()),
+        key_normal_fg: ThemeColor::Named("white".into()),
+        key_pressed_bg: ThemeColor::Named("white".into()),
+        key_pressed_fg: ThemeColor::Named("black".into()),
+    key_border: ThemeColor::Named("white".into()),
+
+        chart_line: ThemeColor::Named("white".into()),
+        chart_axis: ThemeColor::Named("gray".into()),
+        chart_labels: ThemeColor::Named("gray".into()),
+
+        success: ThemeColor::Named("white".into()),
+        warning: ThemeColor::Named("white".into()),
+        error: ThemeColor::Named("white".into()),
+        info: ThemeColor::Named("white".into()),
+    }
+}
+
 /// Return a list of preset names available to the UI.
 pub fn preset_names() -> Vec<&'static str> {
     vec![
@@ -318,6 +356,7 @@ pub fn preset_names() -> Vec<&'static str> {
         "Nord",
         "One Dark",
         "Monokai",
+        "Terminal",
     ]
 }
 
@@ -332,6 +371,7 @@ pub fn theme_by_name(name: &str) -> Option<Theme> {
         "nord" => Some(nord()),
         "one dark" | "one_dark" => Some(one_dark()),
         "monokai" => Some(monokai()),
+        "terminal" => Some(terminal()),
         _ => None,
     }
 }
