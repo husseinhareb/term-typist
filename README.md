@@ -44,54 +44,43 @@ A feature-rich terminal-based typing speed test application written in Rust. Pra
 
 <p align="center">
   <img width="1920" alt="Main typing interface" src="https://github.com/user-attachments/assets/896593f8-001a-484e-a14e-ca8063b12da2" />
-  <em>Main typing interface with real-time WPM tracking</em>
+  <em>Main interface</em>
 </p>
-
 <p align="center">
-  <img width="1920" alt="Active typing test" src="https://github.com/user-attachments/assets/3a288c39-f414-4447-a763-5b648b0ce852" />
-  <em>Active typing test with visual keyboard feedback</em>
+  <img width="1920" alt="Theme showcase 5" src="https://github.com/user-attachments/assets/3507cacb-5ed2-4fb5-a0e7-404b5dfc84e0" />
+  <em>Menu</em>
 </p>
-
 <p align="center">
-  <img width="1920" alt="Test results with WPM graph" src="https://github.com/user-attachments/assets/70ce0b84-a505-4b10-81d3-7b2f2f9d0c03" />
-  <em>Detailed test results with WPM graph</em>
+  <img width="1920" alt="Theme showcase 4" src="https://github.com/user-attachments/assets/6612a33f-c102-4838-b7ec-16ede011d8ef" />
+  <em>Settings</em>
 </p>
-
-<p align="center">
-  <img width="1920" alt="Settings view" src="https://github.com/user-attachments/assets/7fd64cba-c8b0-4f2f-8443-fdaff72e8204" />
-  <em>Customizable settings and theme options</em>
-</p>
-
 <p align="center">
   <img width="1920" alt="Profile and test history" src="https://github.com/user-attachments/assets/d56aae96-5f1a-413d-bc84-a5ad4d5ecf2d" />
-  <em>Test history and performance statistics</em>
+  <em>Test results</em>
 </p>
 
 <p align="center">
   <img width="1920" alt="Theme showcase 1" src="https://github.com/user-attachments/assets/3dfd2d22-9dea-4809-b65d-1c3ede6ce2cc" />
-  <em>Theme: Catppuccin Mocha</em>
+  <em>Leaderboard</em>
 </p>
 
 <p align="center">
   <img width="1920" alt="Theme showcase 2" src="https://github.com/user-attachments/assets/34a07084-4322-4aa7-9eee-f470e0b65247" />
-  <em>Theme: Gruvbox Dark</em>
+  <em>Profile Menu</em>
 </p>
 
 <p align="center">
   <img width="1920" alt="Theme showcase 3" src="https://github.com/user-attachments/assets/1e44eabf-bffd-4c9a-bcc3-a3661f24888f" />
-  <em>Theme: Dracula</em>
+  <em>Help Menu</em>
 </p>
-
 <p align="center">
-  <img width="1920" alt="Theme showcase 4" src="https://github.com/user-attachments/assets/6612a33f-c102-4838-b7ec-16ede011d8ef" />
-  <em>Theme: Solarized Dark</em>
+  <img width="1920" alt="Test results with WPM graph" src="https://github.com/user-attachments/assets/70ce0b84-a505-4b10-81d3-7b2f2f9d0c03" />
+  <em>Other themes</em>
 </p>
-
 <p align="center">
-  <img width="1920" alt="Theme showcase 5" src="https://github.com/user-attachments/assets/3507cacb-5ed2-4fb5-a0e7-404b5dfc84e0" />
-  <em>Theme: Nord</em>
+  <img width="1920" alt="Settings view" src="https://github.com/user-attachments/assets/7fd64cba-c8b0-4f2f-8443-fdaff72e8204" />
+  <em>Other themes</em>
 </p>
-
 ## Installation
 
 ### Prerequisites
