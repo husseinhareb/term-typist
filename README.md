@@ -86,20 +86,68 @@ A feature-rich terminal-based typing speed test application written in Rust. Pra
 ### Prerequisites
 
 - Rust 1.70 or higher
-- `pkg-config`
-- `libasound2-dev` (for audio support on Linux)
+- `pkg-config` (or `pkgconfig`)
+- ALSA development libraries (for audio support on Linux)
 
 ### Installing Dependencies
 
-On Ubuntu/Debian:
+#### Automatic Installation (Recommended)
+
+The provided script automatically detects your Linux distribution and installs the appropriate dependencies:
+
 ```bash
 sudo ./scripts/install-deps.sh
 ```
 
-Or manually:
+This script supports the following distributions:
+- **Debian-based**: Ubuntu, Debian, Pop!_OS, Linux Mint, Elementary OS
+- **Red Hat-based**: Fedora, CentOS, RHEL, Rocky Linux, AlmaLinux
+- **Arch-based**: Arch Linux, Manjaro, EndeavourOS, Garuda Linux
+- **SUSE-based**: openSUSE Leap/Tumbleweed, SUSE Linux Enterprise
+- **Others**: Alpine Linux, Gentoo, Void Linux
+
+#### Manual Installation by Distribution
+
+If the automatic script doesn't work or you prefer manual installation:
+
+**Debian/Ubuntu/Pop!_OS/Mint:**
 ```bash
 sudo apt-get update
 sudo apt-get install -y pkg-config libasound2-dev
+```
+
+**Fedora/CentOS/RHEL/Rocky Linux:**
+```bash
+# Fedora 22+ (using dnf)
+sudo dnf install -y pkgconfig alsa-lib-devel
+
+# Older versions (using yum)
+sudo yum install -y pkgconfig alsa-lib-devel
+```
+
+**Arch Linux/Manjaro/EndeavourOS:**
+```bash
+sudo pacman -S pkg-config alsa-lib
+```
+
+**openSUSE:**
+```bash
+sudo zypper install -y pkg-config alsa-devel
+```
+
+**Alpine Linux:**
+```bash
+sudo apk add pkgconfig alsa-lib-dev
+```
+
+**Gentoo:**
+```bash
+sudo emerge dev-util/pkgconfig media-libs/alsa-lib
+```
+
+**Void Linux:**
+```bash
+sudo xbps-install -y pkg-config alsa-lib-devel
 ```
 
 ### Building from Source
