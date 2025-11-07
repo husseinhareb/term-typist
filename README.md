@@ -317,5 +317,3 @@ This project is licensed under the MIT License - see the [LICENCE](LICENCE) file
 - Keyboard sound samples inspired by [kbs.im](https://kbs.im/) - Keyboard sounds simulator
 - Mechanical keyboard sound samples from [kbs.im](https://kbs.im/)
 ---
-
-**Happy Typing!** 🚀⌨️
