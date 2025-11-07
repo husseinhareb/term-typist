@@ -197,7 +197,25 @@ On first run, term-typist creates a default theme configuration at `~/.config/te
 
 You can customize colors, UI elements, and visual appearance. See [THEMING.md](THEMING.md) for a comprehensive guide.
 
-Example themes are available in the `examples/` directory:
+#### Built-in Themes
+
+term-typist includes several predefined themes that you can switch between in the settings:
+
+- **Catppuccin Mocha** - Soothing pastel theme with mauve and teal accents
+- **Gruvbox Dark** - Retro groove with warm, earthy tones
+- **Dracula** - Dark theme with vibrant purples and cyans
+- **Solarized Dark** - Precision colors for optimal readability in low light
+- **Solarized Light** - Precision colors for optimal readability in bright light
+- **Nord** - Arctic, north-bluish color palette
+- **One Dark** - Atom's iconic One Dark theme
+- **Monokai** - Sublime Text's classic color scheme
+- **Terminal** - Plain black and white terminal colors for a minimalist look
+
+To change themes, press `s` to open settings and use `t` to cycle through themes, or use the Left/Right arrow keys on the Theme setting row.
+
+#### Custom Themes
+
+Example custom themes are available in the `examples/` directory:
 - `theme-dark.toml` - Dark theme with muted colors
 - `theme-colorful.toml` - Vibrant theme with RGB colors
 
