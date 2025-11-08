@@ -60,7 +60,7 @@ pub fn detection_available() -> bool {
             }
         }
 
-        return false;
+        false
     }
 
     #[cfg(not(any(target_os = "windows", target_os = "linux")))]

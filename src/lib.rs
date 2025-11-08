@@ -32,7 +32,7 @@ mod ui; // src/ui/mod.rs → draw.rs, keyboard.rs
 mod wpm; // src/wpm.rs // src/audio.rs
 
 use crate::ui::profile::draw_profile;
-use crate::ui::leaderboard::{draw_leaderboard, handle_leaderboard_key};
+use crate::ui::leaderboard::draw_leaderboard;
 use crate::ui::settings::draw_settings;
 use app::input::handle_nav;
 use app::state::{App, Mode, Status};

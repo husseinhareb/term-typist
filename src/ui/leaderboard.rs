@@ -4,10 +4,10 @@ use rusqlite::Connection;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tui::{
     backend::Backend,
-    layout::{Alignment, Rect},
+    layout::Rect,
     style::Style,
     text::Span,
-    widgets::{Block, Borders, Cell, Paragraph, Row, Table, TableState, Wrap, Clear},
+    widgets::{Block, Borders, Cell, Row, Table, TableState, Clear},
     Frame,
 };
 

@@ -467,9 +467,7 @@ pub fn bottom_split_band<B: Backend>(f: &Frame<B>, app: &App) -> Option<tui::lay
 
     let b_cons = if app.show_text && app.show_keyboard {
         vec![Constraint::Percentage(42), Constraint::Percentage(58)]
-    } else if app.show_text {
-        vec![Constraint::Percentage(100)]
-    } else if app.show_keyboard {
+    } else if app.show_text || app.show_keyboard {
         vec![Constraint::Percentage(100)]
     } else {
         // no bottom content
@@ -506,7 +504,7 @@ pub fn draw_finished<B: Backend>(f: &mut Frame<B>, app: &App) {
     // Align net and raw WPM to the same time window (test start -> end) so raw >= net.
     let (elapsed_secs, net, raw) = if let Some(start) = app.start {
         let end = std::time::Instant::now();
-        let elapsed_secs = end.duration_since(start).as_secs() as u64;
+        let elapsed_secs = end.duration_since(start).as_secs();
         let elapsed_f = end.duration_since(start).as_secs_f64();
         let net =
             crate::wpm::net_wpm_from_correct_timestamps_window(&app.correct_timestamps, start, end);
