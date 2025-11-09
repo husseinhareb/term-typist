@@ -44,15 +44,15 @@ A feature-rich terminal-based typing speed test application written in Rust. Pra
 
 <p align="center">
   <img width="1920" alt="Main typing interface" src="https://github.com/user-attachments/assets/896593f8-001a-484e-a14e-ca8063b12da2" />
-  <em>Main interface</em>
+  <em>Main Page</em>
 </p>
 <p align="center">
   <img width="1920" alt="Theme showcase 5" src="https://github.com/user-attachments/assets/3507cacb-5ed2-4fb5-a0e7-404b5dfc84e0" />
-  <em>Menu</em>
+  <em>Menu Page</em>
 </p>
 <p align="center">
   <img width="1920" alt="Theme showcase 4" src="https://github.com/user-attachments/assets/6612a33f-c102-4838-b7ec-16ede011d8ef" />
-  <em>Settings</em>
+  <em>Settings Page</em>
 </p>
 <p align="center">
   <img width="1920" alt="Profile and test history" src="https://github.com/user-attachments/assets/d56aae96-5f1a-413d-bc84-a5ad4d5ecf2d" />
@@ -66,7 +66,7 @@ A feature-rich terminal-based typing speed test application written in Rust. Pra
 
 <p align="center">
   <img width="1920" alt="Theme showcase 2" src="https://github.com/user-attachments/assets/34a07084-4322-4aa7-9eee-f470e0b65247" />
-  <em>Profile Menu</em>
+  <em>Profile Page</em>
 </p>
 
 <p align="center">
@@ -79,8 +79,8 @@ A feature-rich terminal-based typing speed test application written in Rust. Pra
 </p>
 <p align="center">
   <img width="1920" alt="Settings view" src="https://github.com/user-attachments/assets/7fd64cba-c8b0-4f2f-8443-fdaff72e8204" />
-  <em>Other themes</em>
 </p>
+
 ## Installation
 
 ### Prerequisites
