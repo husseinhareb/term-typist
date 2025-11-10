@@ -206,6 +206,11 @@ term-typist
 - `Backspace` - Delete previous character
 - Type normally to complete the test
 
+#### Menu
+- `Arrow keys` / `hjkl` - Navigate menu items
+- `Enter` - Activate selected menu item
+- `Esc` - Close menu
+
 #### Settings
 - `Arrow keys` / `hjkl` - Navigate settings
 - `Left/Right` - Change selected option
@@ -219,7 +224,6 @@ term-typist
 - `Arrow keys` / `hjkl` - Navigate test history
 - `Page Up/Down` - Fast navigation
 - `Home/End` - Jump to start/end
-- `Enter` - View detailed test summary
 - `Esc` - Return to main view
 
 #### Panel Toggles (Shift + Number)
