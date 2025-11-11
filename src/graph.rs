@@ -177,6 +177,38 @@ pub fn draw_wpm_chart<B: Backend>(
         let chart_area = Rect::new(top_rect.x, top_rect.y, top_rect.width.saturating_sub(gutter), top_rect.height);
         f.render_widget(chart, chart_area);
 
+        // Draw legend box with WPM and Errors labels
+        if chart_area.width > 20 && chart_area.height > 5 {
+            use tui::widgets::Paragraph;
+            
+            // Position legend in top-right corner of the chart
+            let legend_width = 9u16;
+            let legend_height = 4u16;
+            let legend_x = chart_area.x.saturating_add(chart_area.width).saturating_sub(legend_width).saturating_sub(2);
+            let legend_y = chart_area.y.saturating_add(2);
+            let legend_rect = Rect::new(legend_x, legend_y, legend_width, legend_height);
+            
+            // Create legend content
+            let legend_lines = vec![
+                Spans::from(vec![
+                    Span::styled("─", Style::default().fg(theme.chart_line.to_tui_color())),
+                    Span::styled(" WPM", Style::default().fg(theme.chart_line.to_tui_color())),
+                ]),
+                Spans::from(vec![
+                    Span::styled("✕", Style::default().fg(theme.error.to_tui_color())),
+                    Span::styled(" Errors", Style::default().fg(theme.error.to_tui_color())),
+                ]),
+            ];
+            
+            let legend = Paragraph::new(legend_lines)
+                .block(Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(theme.border.to_tui_color())))
+                .style(Style::default().bg(theme.background.to_tui_color()));
+            
+            f.render_widget(legend, legend_rect);
+        }
+
         // Overlay red 'X' markers for each error point by mapping chart
         // coordinates -> terminal cells and rendering a 1x1 Paragraph with
         // a heavy multiplication glyph. This gives us a consistent red X

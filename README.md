@@ -123,9 +123,7 @@ sudo make install
 ```
 
 This will:
-- Create the data directory at `~/.local/share/term-typist/`
-- Copy word lists to the data directory
-- Build the release binary
+- Build the release binary with embedded word dictionaries
 - Install the binary to `/usr/bin/`
 
 ### Running
@@ -167,11 +165,12 @@ term-typist
 #### Settings
 - `Arrow keys` / `hjkl` - Navigate settings
 - `Left/Right` - Change selected option
-- `l` - Cycle keyboard layouts
+- `l` - Cycle keyboard layouts (QWERTY, AZERTY, DVORAK, QWERTZ)
+- `Left/Right on Language` - Cycle test languages (English, German, Spanish, French, Japanese)
 - `t` - Cycle themes
 - `k` - Cycle keyboard switch sounds
 - `a` - Toggle audio on/off
-- `Esc` - Return to main view
+- `Esc` - Return to main view (applies language change)
 
 #### Profile & Leaderboard
 - `Arrow keys` / `hjkl` - Navigate test history
@@ -294,6 +293,7 @@ rm -rf ~/.local/share/term-typist
 - [tui](https://github.com/fdehau/tui-rs) - Terminal UI framework
 - [rusqlite](https://github.com/rusqlite/rusqlite) - SQLite database bindings
 - [rodio](https://github.com/RustAudio/rodio) - Audio playback
+- [random_word](https://github.com/ctsrc/random_word) - Multi-language word generation
 - [serde](https://github.com/serde-rs/serde) - Serialization framework
 - [toml](https://github.com/toml-rs/toml) - TOML parser
 - [chrono](https://github.com/chronotope/chrono) - Date and time handling
