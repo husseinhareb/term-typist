@@ -32,6 +32,16 @@ pub enum KeyboardLayout {
     Qwertz,
 }
 
+/// Supported languages for word generation.
+#[derive(PartialEq, Clone, Copy)]
+pub enum Language {
+    English,
+    German,
+    Spanish,
+    French,
+    Japanese,
+}
+
 /// Application state tracking typing progress, timing, UI flags, and samples.
 pub struct App {
     pub target: String,
@@ -63,6 +73,7 @@ pub struct App {
     pub keyboard_layout: KeyboardLayout,
     pub keyboard_switch: String,
     pub audio_enabled: bool,
+    pub language: Language,
     pub theme: Theme,
     // Cursor index for the Settings list (which line is selected)
     pub settings_cursor: usize,
@@ -105,6 +116,19 @@ impl App {
             _ => true,
         };
 
+        // Read persisted language setting (default English)
+        let language = match crate::app::config::read_language() {
+            Ok(Some(name)) => match name.to_lowercase().as_str() {
+                "english" => Language::English,
+                "german" => Language::German,
+                "spanish" => Language::Spanish,
+                "french" => Language::French,
+                "japanese" => Language::Japanese,
+                _ => Language::English,
+            },
+            _ => Language::English,
+        };
+
         App {
             target: target.clone(),
             status: vec![Status::Untyped; target.chars().count()],
@@ -132,6 +156,7 @@ impl App {
             keyboard_layout: kb_layout,
             keyboard_switch: kb_switch,
             audio_enabled,
+            language,
             theme: Theme::load(),
             settings_cursor: 0,
             menu_cursor: 0,

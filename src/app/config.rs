@@ -208,6 +208,65 @@ pub fn read_audio_enabled() -> io::Result<Option<bool>> {
     Ok(None)
 }
 
+/// Write the language into the config file as: language <NAME>
+pub fn write_language(language: &str) -> io::Result<()> {
+    let file_path = config_file()?;
+    let mut file_content = String::new();
+
+    if file_path.exists() {
+        let mut file = File::open(&file_path)?;
+        file.read_to_string(&mut file_content)?;
+    }
+
+    let mut updated_content = String::new();
+    let mut found = false;
+
+    for line in file_content.lines() {
+        if line.trim().starts_with("language") {
+            found = true;
+            updated_content.push_str(&format!("language {}\n", language));
+        } else {
+            updated_content.push_str(line);
+            updated_content.push('\n');
+        }
+    }
+
+    if !found {
+        updated_content.push_str(&format!("language {}\n", language));
+    }
+
+    // Ensure parent dir exists
+    if let Some(parent) = file_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    let mut file = File::create(&file_path)?;
+    file.write_all(updated_content.as_bytes())?;
+    Ok(())
+}
+
+/// Read language from config file. Returns Ok(name) if found.
+pub fn read_language() -> io::Result<Option<String>> {
+    let file_path = config_file()?;
+    if !file_path.exists() {
+        return Ok(None);
+    }
+    let file = File::open(&file_path)?;
+    let reader = BufReader::new(file);
+
+    for line in reader.lines() {
+        let line = line?;
+        if line.trim().starts_with("language") {
+            let name = line
+                .split_whitespace()
+                .nth(1)
+                .map(|s| s.to_string());
+            return Ok(name);
+        }
+    }
+    Ok(None)
+}
+
 /// Write the selected test mode and value to config as: test_mode <tab> test_value <value>
 pub fn write_selected_mode_value(tab: usize, value: usize) -> io::Result<()> {
     let file_path = config_file()?;

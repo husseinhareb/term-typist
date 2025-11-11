@@ -12,6 +12,12 @@ A feature-rich terminal-based typing speed test application written in Rust. Pra
   - **Words Mode**: Complete a specific number of words (10, 25, 50, 100)
   - **Zen Mode**: Practice without constraints
 
+- **Multi-Language Support**
+  - Practice typing in multiple languages: English, German, Spanish, French, Japanese
+  - 172,000+ real words from built-in dictionaries
+  - No external word files needed - all embedded in the application
+  - Switch languages instantly from settings
+
 - **Keyboard Support**
   - Multiple keyboard layouts: QWERTY, AZERTY, DVORAK, QWERTZ
   - Visual on-screen keyboard with real-time key highlighting
@@ -244,12 +250,11 @@ term-typist/
 │   ├── caps.rs           # Caps Lock detection
 │   ├── config.rs         # Configuration management
 │   ├── db.rs             # SQLite database operations
-│   ├── generator.rs      # Text generation for tests
+│   ├── generator.rs      # Text generation for tests (using random-word crate)
 │   ├── graph.rs          # WPM graph rendering
 │   ├── theme.rs          # Theme system
 │   ├── themes_presets.rs # Built-in themes
 │   └── wpm.rs            # WPM calculation
-├── words/                # Word lists for test generation
 ├── examples/             # Example theme configurations
 └── Cargo.toml            # Rust dependencies
 ```

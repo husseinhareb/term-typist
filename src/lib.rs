@@ -83,8 +83,17 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
-        let sentence = generator::generate_for_mode(default_tab, default_value);
-        let mut a = App::new(sentence);
+        // Create app first to get the language setting
+        let temp_sentence = String::new();
+        let mut a = App::new(temp_sentence);
+        a.selected_tab = default_tab;
+        a.selected_value = default_value;
+        
+        // Now generate with the correct language
+        let sentence = generator::generate_for_mode(default_tab, default_value, a.language);
+        a.target = sentence.clone();
+        a.status = vec![crate::app::state::Status::Untyped; sentence.chars().count()];
+        a.corrected = vec![false; sentence.chars().count()];
         a.selected_tab = default_tab;
         a.selected_value = default_value;
         a
@@ -409,6 +418,17 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     match app.mode {
                         // When in small popups, Esc should just return to the main view.
                         Mode::Profile | Mode::Settings | Mode::Menu | Mode::Help | Mode::Leaderboard => {
+                            // If exiting Settings, regenerate target with current language
+                            if app.mode == Mode::Settings && app.selected_tab != 2 {
+                                let new_target = generator::generate_for_mode(
+                                    app.selected_tab,
+                                    app.selected_value,
+                                    app.language,
+                                );
+                                app.target = new_target.clone();
+                                app.status = vec![Status::Untyped; new_target.chars().count()];
+                                app.corrected = vec![false; new_target.chars().count()];
+                            }
                             app.mode = Mode::View;
                             continue 'main;
                         }
@@ -418,9 +438,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                                 save_test(&mut conn, &app)?;
                             }
                             // Restart the test regardless of whether it started
-                            // Preserve UI choices (layout, switch, and selected mode/value)
+                            // Preserve UI choices (layout, switch, language, and selected mode/value)
                             let cur_layout = app.keyboard_layout;
                             let cur_switch = app.keyboard_switch.clone();
+                            let cur_language = app.language;
                             let cur_tab = app.selected_tab;
                             let cur_value = app.selected_value;
 
@@ -429,12 +450,13 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                                 // Zen mode: start with empty target
                                 String::new()
                             } else {
-                                generator::generate_for_mode(cur_tab, cur_value)
+                                generator::generate_for_mode(cur_tab, cur_value, cur_language)
                             };
                             app = App::new(new_target);
                             // restore preserved UI state
                             app.keyboard_layout = cur_layout;
                             app.keyboard_switch = cur_switch;
+                            app.language = cur_language;
                             app.selected_tab = cur_tab;
                             app.selected_value = cur_value;
                             // Clear any pressed key highlight
@@ -552,6 +574,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                                 let new_target = generator::generate_for_mode(
                                     app.selected_tab,
                                     app.selected_value,
+                                    app.language,
                                 );
                                 app.target = new_target.clone();
                                 app.status = vec![
@@ -640,17 +663,19 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                                     // the restarted test length/time corresponds to what was selected.
                                     let cur_layout = app.keyboard_layout;
                                     let cur_switch = app.keyboard_switch.clone();
+                                    let cur_language = app.language;
                                     let cur_tab = app.selected_tab;
                                     let cur_value = app.selected_value;
 
                                     let new_target = if cur_tab == 2 {
                                         String::new()
                                     } else {
-                                        generator::generate_for_mode(cur_tab, cur_value)
+                                        generator::generate_for_mode(cur_tab, cur_value, cur_language)
                                     };
                                     app = App::new(new_target);
                                     app.keyboard_layout = cur_layout;
                                     app.keyboard_switch = cur_switch;
+                                    app.language = cur_language;
                                     app.selected_tab = cur_tab;
                                     app.selected_value = cur_value;
                                     keyboard.pressed_key = None;
@@ -1003,6 +1028,54 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                                     );
                                 }
                                 8 => {
+                                    app.language = match app.language {
+                                        crate::app::state::Language::English => {
+                                            if left {
+                                                crate::app::state::Language::Japanese
+                                            } else {
+                                                crate::app::state::Language::German
+                                            }
+                                        }
+                                        crate::app::state::Language::German => {
+                                            if left {
+                                                crate::app::state::Language::English
+                                            } else {
+                                                crate::app::state::Language::Spanish
+                                            }
+                                        }
+                                        crate::app::state::Language::Spanish => {
+                                            if left {
+                                                crate::app::state::Language::German
+                                            } else {
+                                                crate::app::state::Language::French
+                                            }
+                                        }
+                                        crate::app::state::Language::French => {
+                                            if left {
+                                                crate::app::state::Language::Spanish
+                                            } else {
+                                                crate::app::state::Language::Japanese
+                                            }
+                                        }
+                                        crate::app::state::Language::Japanese => {
+                                            if left {
+                                                crate::app::state::Language::French
+                                            } else {
+                                                crate::app::state::Language::English
+                                            }
+                                        }
+                                    };
+                                    let _ = crate::app::config::write_language(
+                                        match app.language {
+                                            crate::app::state::Language::English => "english",
+                                            crate::app::state::Language::German => "german",
+                                            crate::app::state::Language::Spanish => "spanish",
+                                            crate::app::state::Language::French => "french",
+                                            crate::app::state::Language::Japanese => "japanese",
+                                        },
+                                    );
+                                }
+                                9 => {
                                     let presets = crate::themes_presets::preset_names();
                                     if !presets.is_empty() {
                                         // find current index
@@ -1029,7 +1102,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                                         }
                                     }
                                 }
-                                9 => {
+                                10 => {
                                     // Keyboard switch: cycle available switch samples
                                     let list = crate::audio::list_switches();
                                     if !list.is_empty() {
@@ -1048,7 +1121,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                                         );
                                     }
                                 }
-                                10 => {
+                                11 => {
                                     app.audio_enabled = !app.audio_enabled;
                                     let _ =
                                         crate::app::config::write_audio_enabled(app.audio_enabled);

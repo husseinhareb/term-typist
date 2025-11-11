@@ -48,6 +48,16 @@ pub fn draw_settings<B: Backend>(f: &mut Frame<B>, app: &App, _keyboard: &Keyboa
     };
     items.push(("Keyboard layout".into(), format!("<<{}>>", layout_label)));
 
+    // Language
+    let language_label = match app.language {
+        crate::app::state::Language::English => "English",
+        crate::app::state::Language::German => "German",
+        crate::app::state::Language::Spanish => "Spanish",
+        crate::app::state::Language::French => "French",
+        crate::app::state::Language::Japanese => "Japanese",
+    };
+    items.push(("Test language".into(), format!("<<{}>>", language_label)));
+
     // Theme
     let theme_names = themes_presets::preset_names();
     let mut cur_theme_name = "Custom".to_string();

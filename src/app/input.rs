@@ -49,7 +49,7 @@ pub fn handle_nav(app: &mut App, code: KeyCode) {
             app.status = vec![];
             app.free_text.clear();
         } else {
-            let new_target = generator::generate_for_mode(app.selected_tab, app.selected_value);
+            let new_target = generator::generate_for_mode(app.selected_tab, app.selected_value, app.language);
             app.target = new_target.clone();
             app.status = vec![Status::Untyped; new_target.chars().count()];
         }

@@ -11,6 +11,7 @@ crossterm = "0.29.0"
 ctrlc = "3.4.4"
 dirs = "5.0.1"
 rand = "0.8"
+random_word = { version = "0.4", features = ["en", "de", "es", "fr", "ja"] }
 rusqlite = "0.37.0"
 serde = { version = "1.0", features = ["derive"] }
 termion = "3.0.0"

@@ -1,62 +1,28 @@
 // src/generator.rs
-use std::fs::File;
-use std::io::{self, BufRead};
-// PathBuf not needed here (we manipulate dirs::data_dir())
-use rand::seq::SliceRandom;
+use random_word::Lang;
+use crate::app::state::Language;
 
-/// Read the bundled word list from the XDG data directory.
-/// Expected path: $XDG_DATA_HOME/term-typist/words/words.txt
-fn read_words() -> io::Result<Vec<String>> {
-    let mut file_path = match dirs::data_dir() {
-        Some(p) => p,
-        None => return Err(io::Error::new(io::ErrorKind::NotFound, "data directory not found")),
+pub fn generate_random_sentence(num_words: usize, language: Language) -> String {
+    let lang = match language {
+        Language::English => Lang::En,
+        Language::German => Lang::De,
+        Language::Spanish => Lang::Es,
+        Language::French => Lang::Fr,
+        Language::Japanese => Lang::Ja,
     };
-
-    file_path.push("term-typist");
-    file_path.push("words");
-    file_path.push("words.txt");
-
-    let file = File::open(&file_path)?;
-    let reader = io::BufReader::new(file);
-    let mut words = Vec::new();
-
-    for word in reader.lines().map_while(Result::ok) {
-        words.push(word);
-    }
-
-    Ok(words)
-}
-
-pub fn generate_random_sentence(num_words: usize) -> String {
-    let words = match read_words() {
-        Ok(words) => words,
-        Err(err) => {
-            eprintln!(
-                "Error reading words: {}. Expected: $XDG_DATA_HOME/term-typist/words/words.txt",
-                err
-            );
-            return String::new();
-        }
-    };
-
-    let mut rng = rand::thread_rng();
-    let mut sentence = String::new();
-
-    for _ in 0..num_words {
-        if let Some(random_word) = words.choose(&mut rng) {
-            sentence.push_str(random_word);
-            sentence.push(' ');
-        }
-    }
-
-    sentence.trim().to_string()
+    
+    (0..num_words)
+        .map(|_| random_word::gen(lang).to_lowercase())
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Generate a target text sized according to the selected test mode and value.
 ///
 /// - `selected_tab`: 0 = Time, 1 = Words, 2 = Zen
 /// - `selected_value`: index into the options returned by `App::current_options()` for tabs 0/1
-pub fn generate_for_mode(selected_tab: usize, selected_value: usize) -> String {
+/// - `language`: the language to use for word generation
+pub fn generate_for_mode(selected_tab: usize, selected_value: usize, language: Language) -> String {
     // Conservative baseline typing speed used to size time-based tests (words per minute).
     // Raised from 40 to 60 so faster typists have more words available during the timer.
     const DEFAULT_WPM: f64 = 60.0;
@@ -84,5 +50,5 @@ pub fn generate_for_mode(selected_tab: usize, selected_value: usize) -> String {
         }
     };
 
-    generate_random_sentence(num_words)
+    generate_random_sentence(num_words, language)
 }

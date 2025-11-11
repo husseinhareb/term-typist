@@ -11,8 +11,6 @@ all: build
 
 # Build target
 build:
-> mkdir -p $(LOCAL_DIR)
-> cp -r words $(LOCAL_DIR)
 > cargo build --release
 
 # Install target
