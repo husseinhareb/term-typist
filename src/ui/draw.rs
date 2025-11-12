@@ -498,7 +498,23 @@ pub fn draw_finished<B: Backend>(f: &mut Frame<B>, app: &App) {
         .split(size);
 
     // Left: WPM chart
-    graph::draw_wpm_chart(f, chunks[0], &app.samples, &app.theme);
+    // Collect error timestamps (when incorrect chars were typed)
+    let error_timestamps: Vec<u64> = app.correct_timestamps.iter()
+        .enumerate()
+        .filter(|(i, _)| *i < app.status.len() && app.status[*i] == crate::app::state::Status::Incorrect)
+        .map(|(_, t)| t.elapsed().as_secs())
+        .collect();
+    
+    graph::draw_wpm_chart(
+        f, 
+        chunks[0], 
+        &app.samples, 
+        &app.theme,
+        if error_timestamps.is_empty() { None } else { Some(&error_timestamps) },
+        Some(&app.target),
+        Some(&app.status),
+        Some(&app.corrected),
+    );
 
     // Right: stats
     // Align net and raw WPM to the same time window (test start -> end) so raw >= net.

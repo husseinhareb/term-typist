@@ -480,7 +480,8 @@ pub fn draw_profile<B: Backend>(f: &mut Frame<B>, conn: &Connection, theme: &The
         }
     }
 
-    graph::draw_wpm_chart(f, bottom[0], &data, theme);
+    // In profile view, we don't have error/word details, so pass None for those parameters
+    graph::draw_wpm_chart(f, bottom[0], &data, theme, None, None, None, None);
 
     // Scrollable Recent Tests table
         let sql = format!(
