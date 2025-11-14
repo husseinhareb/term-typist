@@ -72,7 +72,6 @@ const MENU_WIDTH: [u16; 3] = [19, 12, 12];
 /// btop-like per-row colors
 // NOTE: selected/normal hard-coded color arrays removed. Menu now uses
 // theme-derived colors for all items (generated at runtime).
-
 pub fn draw_menu<B: Backend>(f: &mut Frame<B>, app: &App, _split_band: Option<Rect>) {
     let area = f.size();
 
@@ -242,6 +241,7 @@ fn render_transparent_line<B: Backend>(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn draw_run<B: Backend>(
     f: &mut Frame<B>,
     bounds: Rect,

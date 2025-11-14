@@ -50,15 +50,15 @@ A feature-rich terminal-based typing speed test application written in Rust. Pra
 
 <p align="center">
   <img width="1920" alt="Main typing interface" src="https://github.com/user-attachments/assets/896593f8-001a-484e-a14e-ca8063b12da2" />
-  <em>Main interface</em>
+  <em>Main Page</em>
 </p>
 <p align="center">
   <img width="1920" alt="Theme showcase 5" src="https://github.com/user-attachments/assets/3507cacb-5ed2-4fb5-a0e7-404b5dfc84e0" />
-  <em>Menu</em>
+  <em>Menu Page</em>
 </p>
 <p align="center">
   <img width="1920" alt="Theme showcase 4" src="https://github.com/user-attachments/assets/6612a33f-c102-4838-b7ec-16ede011d8ef" />
-  <em>Settings</em>
+  <em>Settings Page</em>
 </p>
 <p align="center">
   <img width="1920" alt="Profile and test history" src="https://github.com/user-attachments/assets/d56aae96-5f1a-413d-bc84-a5ad4d5ecf2d" />
@@ -72,7 +72,7 @@ A feature-rich terminal-based typing speed test application written in Rust. Pra
 
 <p align="center">
   <img width="1920" alt="Theme showcase 2" src="https://github.com/user-attachments/assets/34a07084-4322-4aa7-9eee-f470e0b65247" />
-  <em>Profile Menu</em>
+  <em>Profile Page</em>
 </p>
 
 <p align="center">
@@ -85,27 +85,75 @@ A feature-rich terminal-based typing speed test application written in Rust. Pra
 </p>
 <p align="center">
   <img width="1920" alt="Settings view" src="https://github.com/user-attachments/assets/7fd64cba-c8b0-4f2f-8443-fdaff72e8204" />
-  <em>Other themes</em>
 </p>
+
 ## Installation
 
 ### Prerequisites
 
 - Rust 1.70 or higher
-- `pkg-config`
-- `libasound2-dev` (for audio support on Linux)
+- `pkg-config` (or `pkgconfig`)
+- ALSA development libraries (for audio support on Linux)
 
 ### Installing Dependencies
 
-On Ubuntu/Debian:
+#### Automatic Installation (Recommended)
+
+The provided script automatically detects your Linux distribution and installs the appropriate dependencies:
+
 ```bash
 sudo ./scripts/install-deps.sh
 ```
 
-Or manually:
+This script supports the following distributions:
+- **Debian-based**: Ubuntu, Debian, Pop!_OS, Linux Mint, Elementary OS
+- **Red Hat-based**: Fedora, CentOS, RHEL, Rocky Linux, AlmaLinux
+- **Arch-based**: Arch Linux, Manjaro, EndeavourOS, Garuda Linux
+- **SUSE-based**: openSUSE Leap/Tumbleweed, SUSE Linux Enterprise
+- **Others**: Alpine Linux, Gentoo, Void Linux
+
+#### Manual Installation by Distribution
+
+If the automatic script doesn't work or you prefer manual installation:
+
+**Debian/Ubuntu/Pop!_OS/Mint:**
 ```bash
 sudo apt-get update
 sudo apt-get install -y pkg-config libasound2-dev
+```
+
+**Fedora/CentOS/RHEL/Rocky Linux:**
+```bash
+# Fedora 22+ (using dnf)
+sudo dnf install -y pkgconfig alsa-lib-devel
+
+# Older versions (using yum)
+sudo yum install -y pkgconfig alsa-lib-devel
+```
+
+**Arch Linux/Manjaro/EndeavourOS:**
+```bash
+sudo pacman -S pkg-config alsa-lib
+```
+
+**openSUSE:**
+```bash
+sudo zypper install -y pkg-config alsa-devel
+```
+
+**Alpine Linux:**
+```bash
+sudo apk add pkgconfig alsa-lib-dev
+```
+
+**Gentoo:**
+```bash
+sudo emerge dev-util/pkgconfig media-libs/alsa-lib
+```
+
+**Void Linux:**
+```bash
+sudo xbps-install -y pkg-config alsa-lib-devel
 ```
 
 ### Building from Source
@@ -162,6 +210,11 @@ term-typist
 - `Backspace` - Delete previous character
 - Type normally to complete the test
 
+#### Menu
+- `Arrow keys` / `hjkl` - Navigate menu items
+- `Enter` - Activate selected menu item
+- `Esc` - Close menu
+
 #### Settings
 - `Arrow keys` / `hjkl` - Navigate settings
 - `Left/Right` - Change selected option
@@ -176,7 +229,6 @@ term-typist
 - `Arrow keys` / `hjkl` - Navigate test history
 - `Page Up/Down` - Fast navigation
 - `Home/End` - Jump to start/end
-- `Enter` - View detailed test summary
 - `Esc` - Return to main view
 
 #### Panel Toggles (Shift + Number)

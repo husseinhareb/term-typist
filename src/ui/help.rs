@@ -63,15 +63,16 @@ pub fn draw_help<B: Backend>(f: &mut Frame<B>, app: &App) {
         ("Space", "Type a space (during test)"),
         ("Backspace", "Delete previous character"),
         ("p", "Open Profile view"),
+        ("l", "Open Leaderboard view"),
         ("s", "Open Settings view"),
-        ("t", "Cycle theme presets"),
-        ("l", "Cycle keyboard layout"),
-        ("a", "Toggle audio on/off"),
-        ("k / j", "Navigate up/down (vim keys)"),
+        ("t", "Cycle theme presets (in Settings)"),
+        ("k", "Cycle keyboard switch sounds (in Settings)"),
+        ("a", "Toggle audio on/off (in Settings)"),
+        ("h / j / k / l", "Navigate (vim keys: left/down/up/right)"),
         ("Up / Down", "Navigate up/down in lists"),
         ("PageUp / PageDown", "Page navigation in lists"),
         ("Home / End", "Jump to start/end in lists"),
-        ("! @ # $ % ^ &", "Toggle small UI panels (shift+1..7)"),
+        ("Shift+1 to Shift+7", "Toggle UI panels (mode/value/state/speed/timer/text/keyboard)"),
     ];
 
     // Build wrapped paragraph rows so descriptions will wrap inside the

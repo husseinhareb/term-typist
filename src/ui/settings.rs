@@ -22,7 +22,7 @@ pub fn draw_settings<B: Backend>(f: &mut Frame<B>, app: &App, _keyboard: &Keyboa
         .constraints([Constraint::Length(3), Constraint::Min(0)].as_ref())
         .split(f.size());
 
-    let title = Paragraph::new("⚙ Settings")
+    let title = Paragraph::new("Settings")
         // Keep a bordered area for the title but do not render the label
         // inside the block border itself (user requested removing it).
         .block(Block::default().borders(Borders::ALL))

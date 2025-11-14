@@ -3,7 +3,7 @@
 # Variables
 PROJECT_NAME = term-typist
 LOCAL_DIR = /home/$(USER)/.local/share/term-typist/
-RELEASE_BINARY = target/release/$(PROJECT_NAME)/
+RELEASE_BINARY = target/release/$(PROJECT_NAME)
 INSTALL_DIR = /usr/bin/
 
 # Default target
