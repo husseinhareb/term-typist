@@ -22,6 +22,28 @@ static RECENT_CURSOR: AtomicUsize = AtomicUsize::new(0);
 /// Rows per page in the Recent Tests table.
 const PAGE_SIZE: u32 = 10;
 
+/// Returns the currently selected test ID from the profile table (if any).
+pub fn get_selected_test_id(conn: &Connection) -> Option<i64> {
+    let total_tests: u32 = conn
+        .prepare("SELECT COUNT(*) FROM tests")
+        .and_then(|mut s| s.query_row([], |r| r.get(0)))
+        .unwrap_or(0);
+
+    if total_tests == 0 {
+        return None;
+    }
+
+    let mut cursor = RECENT_CURSOR.load(Ordering::Relaxed) as u32;
+    cursor = cursor.min(total_tests.saturating_sub(1));
+
+    // Query the test ID at the cursor position (ordered by started_at DESC)
+    let sql = "SELECT id FROM tests ORDER BY started_at DESC LIMIT 1 OFFSET ?";
+    conn.prepare(sql)
+        .ok()?
+        .query_row([cursor], |r| r.get(0))
+        .ok()
+}
+
 /// Core key handler. Works for both helpers above.
 /// - Up      → newer tests (cursor -= 1, clamped at 0)
 /// - Down    → older tests (cursor += 1)

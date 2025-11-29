@@ -19,6 +19,18 @@ static LEADERBOARD_CURSOR: AtomicUsize = AtomicUsize::new(0);
 /// Rows shown in the leaderboard
 const TOP_N: u32 = 15;
 
+/// Returns the currently selected test ID from the leaderboard (if any).
+pub fn get_selected_test_id(conn: &Connection) -> Option<i64> {
+    let cursor = LEADERBOARD_CURSOR.load(Ordering::Relaxed);
+    
+    // Query the test ID at the cursor position (ordered by wpm DESC)
+    let sql = "SELECT id FROM tests ORDER BY wpm DESC LIMIT 1 OFFSET ?";
+    conn.prepare(sql)
+        .ok()?
+        .query_row([cursor], |r| r.get(0))
+        .ok()
+}
+
 /// Handle navigation keys when the leaderboard modal is active.
 pub fn handle_leaderboard_key(code: KeyCode) {
     match code {

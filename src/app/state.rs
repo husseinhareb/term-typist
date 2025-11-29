@@ -21,6 +21,7 @@ pub enum Mode {
         Menu,
         Help,
         Leaderboard,
+        TestDetail,
 }
 
 /// Supported keyboard layouts for on-screen keyboard and input mapping.
@@ -83,6 +84,10 @@ pub struct App {
     pub caps_lock_on: bool,
     // True when the platform provides a system-backed method to detect CapsLock
     pub caps_detection_available: bool,
+    // Test ID being viewed in detail mode (from Profile/Leaderboard)
+    pub viewing_test_id: Option<i64>,
+    // Previous mode to return to when exiting test detail view
+    pub previous_mode: Option<Mode>,
 }
 
 impl App {
@@ -162,6 +167,8 @@ impl App {
             menu_cursor: 0,
             caps_lock_on: false,
             caps_detection_available: false,
+            viewing_test_id: None,
+            previous_mode: None,
         }
     }
 

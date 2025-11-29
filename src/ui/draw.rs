@@ -646,3 +646,174 @@ pub fn draw_finished<B: Backend>(f: &mut Frame<B>, app: &App) {
 
     f.render_widget(stats, chunks[1]);
 }
+
+/// Draw test details from database for a specific test ID.
+/// Used when viewing historical tests from Profile or Leaderboard.
+pub fn draw_test_details<B: Backend>(
+    f: &mut Frame<B>,
+    conn: &rusqlite::Connection,
+    test_id: i64,
+    theme: &crate::theme::Theme,
+) {
+    let size = f.size();
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
+        .split(size);
+
+    // Fetch test data from database
+    let test_data: Option<(String, i64, String, i64, i64, i64, f64, f64, Option<String>, Option<String>)> = conn
+        .prepare(
+            "SELECT target_text, duration_ms, mode, target_value, correct_chars, incorrect_chars, 
+                    wpm, accuracy, target_statuses, target_corrected 
+             FROM tests WHERE id = ?",
+        )
+        .ok()
+        .and_then(|mut stmt| {
+            stmt.query_row([test_id], |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, i64>(1)?,
+                    r.get::<_, String>(2)?,
+                    r.get::<_, i64>(3)?,
+                    r.get::<_, i64>(4)?,
+                    r.get::<_, i64>(5)?,
+                    r.get::<_, f64>(6)?,
+                    r.get::<_, f64>(7)?,
+                    r.get::<_, Option<String>>(8)?,
+                    r.get::<_, Option<String>>(9)?,
+                ))
+            })
+            .ok()
+        });
+
+    let Some((target_text, duration_ms, mode, target_value, correct_chars, incorrect_chars, wpm, acc, statuses_str, corrected_str)) = test_data else {
+        // No data found, show empty
+        let empty = Paragraph::new("Test not found")
+            .block(Block::default().borders(Borders::ALL).title("Error"))
+            .style(Style::default().bg(theme.background.to_tui_color()).fg(theme.foreground.to_tui_color()));
+        f.render_widget(empty, size);
+        return;
+    };
+
+    // Fetch samples for the chart
+    let samples: Vec<(u64, f64)> = conn
+        .prepare("SELECT elapsed_s, wpm FROM samples WHERE test_id = ? ORDER BY elapsed_s ASC")
+        .ok()
+        .map(|mut stmt| {
+            stmt.query_map([test_id], |r| Ok((r.get::<_, i64>(0)? as u64, r.get::<_, f64>(1)?)))
+                .ok()
+                .map(|rows| rows.filter_map(Result::ok).collect())
+                .unwrap_or_default()
+        })
+        .unwrap_or_default();
+
+    // Parse statuses
+    let statuses: Vec<Status> = statuses_str
+        .as_deref()
+        .map(|s| {
+            s.chars()
+                .map(|c| match c {
+                    'C' => Status::Correct,
+                    'I' => Status::Incorrect,
+                    _ => Status::Untyped,
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    // Parse corrected flags
+    let corrected: Vec<bool> = corrected_str
+        .as_deref()
+        .map(|s| s.chars().map(|c| c == '1').collect())
+        .unwrap_or_default();
+
+    // Left: WPM chart with test words
+    graph::draw_wpm_chart(
+        f,
+        chunks[0],
+        &samples,
+        theme,
+        None, // No error timestamps available from DB
+        Some(&target_text),
+        if statuses.is_empty() { None } else { Some(&statuses) },
+        if corrected.is_empty() { None } else { Some(&corrected) },
+    );
+
+    // Right: stats
+    let elapsed_secs = duration_ms / 1000;
+    let raw = if elapsed_secs > 0 {
+        ((correct_chars + incorrect_chars) as f64 / 5.0) / (elapsed_secs as f64 / 60.0)
+    } else {
+        0.0
+    };
+
+    let test_type = format!("{} {}", mode, target_value);
+
+    // Compute consistency from samples
+    let consistency = {
+        let vs: Vec<f64> = samples.iter().map(|&(_, w)| w).collect();
+        if vs.len() > 1 {
+            let mean = vs.iter().sum::<f64>() / (vs.len() as f64);
+            let var = vs.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / (vs.len() as f64);
+            let std = var.sqrt();
+            format!("{:.0}%", (1.0 - std / (mean + 1.0)).max(0.0) * 100.0)
+        } else {
+            "--%".into()
+        }
+    };
+
+    let items = vec![
+        Spans::from(vec![
+            Span::styled("WPM  ", Style::default().fg(theme.stats_label.to_tui_color())),
+            Span::styled(
+                format!("{:.0}", wpm),
+                Style::default().fg(theme.stats_value.to_tui_color()).add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Spans::from(vec![
+            Span::styled("ACC  ", Style::default().fg(theme.stats_label.to_tui_color())),
+            Span::styled(
+                format!("{:.0}%", acc),
+                Style::default().fg(theme.stats_value.to_tui_color()).add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Spans::from(vec![
+            Span::styled("RAW  ", Style::default().fg(theme.stats_label.to_tui_color())),
+            Span::styled(format!("{:.0}", raw), Style::default().fg(theme.foreground.to_tui_color())),
+        ]),
+        Spans::from(vec![
+            Span::styled("ERR  ", Style::default().fg(theme.stats_label.to_tui_color())),
+            Span::styled(incorrect_chars.to_string(), Style::default().fg(theme.foreground.to_tui_color())),
+        ]),
+        Spans::from(vec![
+            Span::styled("TYPE ", Style::default().fg(theme.stats_label.to_tui_color())),
+            Span::styled(test_type, Style::default().fg(theme.foreground.to_tui_color())),
+        ]),
+        Spans::from(vec![
+            Span::styled("CONS ", Style::default().fg(theme.stats_label.to_tui_color())),
+            Span::styled(consistency, Style::default().fg(theme.foreground.to_tui_color())),
+        ]),
+        Spans::from(vec![
+            Span::styled("TIME ", Style::default().fg(theme.stats_label.to_tui_color())),
+            Span::styled(format!("{}s", elapsed_secs), Style::default().fg(theme.foreground.to_tui_color())),
+        ]),
+        Spans::from(""),
+        Spans::from(Span::styled(
+            "Press Esc to go back",
+            Style::default().fg(theme.stats_label.to_tui_color()),
+        )),
+    ];
+
+    let stats = Paragraph::new(items)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(theme.border.to_tui_color()))
+                .style(Style::default().bg(theme.background.to_tui_color()).fg(theme.foreground.to_tui_color()))
+                .title("Summary"),
+        )
+        .wrap(Wrap { trim: true });
+
+    f.render_widget(stats, chunks[1]);
+}

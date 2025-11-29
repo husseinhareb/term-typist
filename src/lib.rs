@@ -182,6 +182,12 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     draw(f, &app, &keyboard, cached_net, cached_acc);
                     draw_leaderboard(f, &conn, &app.theme);
                 }
+                Mode::TestDetail => {
+                    // draw test detail view if we have a test ID
+                    if let Some(test_id) = app.viewing_test_id {
+                        crate::ui::draw::draw_test_details(f, &conn, test_id, &app.theme);
+                    }
+                }
                 Mode::Settings => {
                     // draw_settings should render your settings UI
                     draw_settings(f, &app, &keyboard);
@@ -282,6 +288,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     Mode::Settings => "Settings",
                     Mode::Menu => "Menu",
                     Mode::Help => "Help",
+                    Mode::TestDetail => "TestDetail",
                 };
                 writeln!(f, "{:.3} mode={} caps_detection_available={} os_caps={} app_caps={}", ts, mode_str, app.caps_detection_available, os_caps, app.caps_lock_on)?;
                 Ok(())
@@ -694,14 +701,44 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                     }
 
                     Mode::Profile => {
+                        // Handle Enter to view test details
+                        if code == KeyCode::Enter {
+                            if let Some(test_id) = crate::ui::profile::get_selected_test_id(&conn) {
+                                app.viewing_test_id = Some(test_id);
+                                app.previous_mode = Some(Mode::Profile);
+                                app.mode = Mode::TestDetail;
+                                continue 'main;
+                            }
+                        }
                         // Handle profile navigation keys
                         use crate::ui::profile::handle_profile_key;
                         handle_profile_key(code);
                     }
 
                     Mode::Leaderboard => {
+                        // Handle Enter to view test details
+                        if code == KeyCode::Enter {
+                            if let Some(test_id) = crate::ui::leaderboard::get_selected_test_id(&conn) {
+                                app.viewing_test_id = Some(test_id);
+                                app.previous_mode = Some(Mode::Leaderboard);
+                                app.mode = Mode::TestDetail;
+                                continue 'main;
+                            }
+                        }
                         use crate::ui::leaderboard::handle_leaderboard_key;
                         handle_leaderboard_key(code);
+                    }
+
+                    Mode::TestDetail => {
+                        // Any key returns to the previous mode
+                        if let Some(prev) = app.previous_mode {
+                            app.mode = prev;
+                            app.previous_mode = None;
+                            app.viewing_test_id = None;
+                        } else {
+                            app.mode = Mode::View;
+                        }
+                        continue 'main;
                     }
 
                     Mode::Settings => {
