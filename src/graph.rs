@@ -29,6 +29,12 @@ pub fn draw_wpm_chart<B: Backend>(
     statuses: Option<&[Status]>,
     statuses_corrected: Option<&[bool]>,
 ) {
+    // Debug: log what we receive - use append mode
+    use std::io::Write;
+    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open("/tmp/term_typist_graph_input.log") {
+        let _ = writeln!(file, "draw_wpm_chart called - errors: {:?}, data len: {}", errors, data.len());
+    }
+    
     // Split the provided area into top (chart) and bottom (words) sections.
     // Bottom section takes ~20% of the total height and the same width.
     let split_h = ((area.height as f64) * 0.80).round() as u16;
@@ -45,7 +51,6 @@ pub fn draw_wpm_chart<B: Backend>(
     let err_band_ratio: f64 = 1.0; // change this to 0.18 for the small bottom band
 
     let wpm_ds = Dataset::default()
-        .name("WPM")
         .marker(symbols::Marker::Braille) // smoother line
         .graph_type(GraphType::Line)
         .style(Style::default().fg(theme.chart_line.to_tui_color()))
@@ -114,6 +119,11 @@ pub fn draw_wpm_chart<B: Backend>(
             err_pts.push((sec as f64, y));
         }
     }
+    
+    // Debug: log error points
+    let _ = std::fs::write("/tmp/term_typist_err_pts.log", 
+        format!("per_sec: {:?}\nmax_per_sec: {}\nmax_w: {}\nmax_t: {}\nerr_pts: {:?}\n", 
+            per_sec, max_per_sec, max_w, max_t, err_pts));
 
     // Keep only the WPM dataset for the chart. We'll draw error markers as
     // explicit red 'X' glyphs overlaid on top of the chart so they are always
@@ -183,7 +193,7 @@ pub fn draw_wpm_chart<B: Backend>(
             
             // Position legend in top-right corner of the chart
             let legend_width = 9u16;
-            let legend_height = 4u16;
+            let legend_height = 2u16;
             let legend_x = chart_area.x.saturating_add(chart_area.width).saturating_sub(legend_width).saturating_sub(2);
             let legend_y = chart_area.y.saturating_add(2);
             let legend_rect = Rect::new(legend_x, legend_y, legend_width, legend_height);
@@ -196,14 +206,11 @@ pub fn draw_wpm_chart<B: Backend>(
                 ]),
                 Spans::from(vec![
                     Span::styled("✕", Style::default().fg(theme.error.to_tui_color())),
-                    Span::styled(" Errors", Style::default().fg(theme.error.to_tui_color())),
+                    Span::styled(" Error", Style::default().fg(theme.error.to_tui_color())),
                 ]),
             ];
             
             let legend = Paragraph::new(legend_lines)
-                .block(Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(theme.border.to_tui_color())))
                 .style(Style::default().bg(theme.background.to_tui_color()));
             
             f.render_widget(legend, legend_rect);

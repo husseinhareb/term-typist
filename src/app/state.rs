@@ -55,6 +55,7 @@ pub struct App {
     pub correct_chars: usize,
     pub incorrect_chars: usize,
     pub correct_timestamps: Vec<Instant>,
+    pub incorrect_timestamps: Vec<Instant>,
     pub last_correct: Instant,
     pub locked: bool,
     pub free_text: String,
@@ -143,6 +144,7 @@ impl App {
             correct_chars: 0,
             incorrect_chars: 0,
             correct_timestamps: Vec::new(),
+            incorrect_timestamps: Vec::new(),
             last_correct: now,
             locked: false,
             free_text: String::new(),
@@ -205,6 +207,7 @@ impl App {
             } else {
                 self.status[i] = Status::Incorrect;
                 self.incorrect_chars += 1;
+                self.incorrect_timestamps.push(Instant::now());
                 // mark this character position as having been incorrect at
                 // least once so later corrections can be highlighted.
                 if i < self.corrected.len() {

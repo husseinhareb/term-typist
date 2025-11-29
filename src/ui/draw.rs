@@ -491,6 +491,12 @@ pub fn bottom_split_band<B: Backend>(f: &Frame<B>, app: &App) -> Option<tui::lay
 
 /// Draw the “finished” summary: left = WPM chart, right = stats.
 pub fn draw_finished<B: Backend>(f: &mut Frame<B>, app: &App) {
+    // Debug: log that draw_finished was called
+    use std::io::Write;
+    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open("/tmp/term_typist_draw_finished.log") {
+        let _ = writeln!(file, "draw_finished called!");
+    }
+    
     let size = f.size();
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
@@ -499,11 +505,18 @@ pub fn draw_finished<B: Backend>(f: &mut Frame<B>, app: &App) {
 
     // Left: WPM chart
     // Collect error timestamps (when incorrect chars were typed)
-    let error_timestamps: Vec<u64> = app.correct_timestamps.iter()
-        .enumerate()
-        .filter(|(i, _)| *i < app.status.len() && app.status[*i] == crate::app::state::Status::Incorrect)
-        .map(|(_, t)| t.elapsed().as_secs())
-        .collect();
+    let error_timestamps: Vec<u64> = if let Some(start) = app.start {
+        app.incorrect_timestamps.iter()
+            .map(|t| t.duration_since(start).as_secs())
+            .collect()
+    } else {
+        Vec::new()
+    };
+    
+    // Debug: log error count to /tmp for troubleshooting
+    let _ = std::fs::write("/tmp/term_typist_errors.log", 
+        format!("incorrect_timestamps len: {}, error_timestamps: {:?}, incorrect_chars: {}\n", 
+            app.incorrect_timestamps.len(), error_timestamps, app.incorrect_chars));
     
     graph::draw_wpm_chart(
         f, 
